@@ -1,0 +1,8 @@
+zlib
+Package: zlib1g-dev
+
+Openssl headers
+Package: libssl-dev
+
+msgfmt
+Package: gettext
