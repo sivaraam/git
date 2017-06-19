@@ -1,0 +1,8 @@
+#! /bin/bash
+# Script to build git
+# to a custom location
+
+CUSTOM_LOCATION="$HOME/.local/bin"
+
+make prefix=$CUSTOM_LOCATION
+make install prefix=$CUSTOM_LOCATION
