@@ -2,7 +2,27 @@
 # Script to build git
 # to a custom location
 
-CUSTOM_LOCATION="$HOME/.local/bin"
+CUSTOM_BUILD_LOCATION="$HOME/.local/bin"
+BASHRC_LOCATION="$HOME/.bashrc"
 
-make prefix=$CUSTOM_LOCATION
-make install prefix=$CUSTOM_LOCATION
+add_to_bashrc() {
+
+  echo -e  "$1" >> $BASHRC_LOCATION
+
+}
+
+make prefix=$CUSTOM_BUILD_LOCATION
+make install prefix=$CUSTOM_BUILD_LOCATION
+
+# Add custom alias to test git to .bashrc
+# when run for first time
+if [ $CUSTOM_GIT_ALIAS -ne 1 ]
+then
+  add_to_bashrc "\n# Custom alias for custom build of git"
+  add_to_bashrc "# Define variable that denotes definiton of alias"
+  add_to_bashrc "export CUSTOM_GIT_ALIAS=1"
+  add_to_bashrc "alias cgit=\"$CUSTOM_BUILD_LOCATION/git\""
+
+  # Ensure changes take place in current shell
+  source $BASHRC_LOCATION
+fi
