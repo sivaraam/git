@@ -1,0 +1,13 @@
+#! /bin/bash
+# Script to test if build passes succesfully
+
+# Source the build script and run it
+# before testing
+. BUILD-CUSTOM
+
+# Temporarily alias custom git command to git
+# to ensure test uses custom build
+alias git=cgit
+
+cd t
+make DEFAULT_TEST_TARGET=prove GIT_PROVE_OPTS='--timer --jobs 16' test |  grep -v '^ok'
