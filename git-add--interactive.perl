@@ -537,7 +537,7 @@ sub list_and_choose {
 				$last_lf = 1;
 			}
 		}
-		if (!$last_lf) {
+		if (@stuff && !$last_lf) {
 			print "\n";
 		}
 
@@ -634,7 +634,6 @@ EOF
 sub status_cmd {
 	list_and_choose({ LIST_ONLY => 1, HEADER => $status_head },
 			list_modified());
-	print "\n";
 }
 
 sub say_n_paths {
@@ -667,7 +666,6 @@ sub update_cmd {
 		       map { $_->{VALUE} } @update);
 		say_n_paths('updated', @update);
 	}
-	print "\n";
 }
 
 sub revert_cmd {
@@ -701,7 +699,6 @@ sub revert_cmd {
 		refresh();
 		say_n_paths('reverted', @update);
 	}
-	print "\n";
 }
 
 sub add_untracked_cmd {
@@ -711,9 +708,8 @@ sub add_untracked_cmd {
 		system(qw(git update-index --add --), @add);
 		say_n_paths('added', @add);
 	} else {
-		print __("No untracked files.\n");
+		print __("No untracked file chosen.\n");
 	}
-	print "\n";
 }
 
 sub run_git_apply {
