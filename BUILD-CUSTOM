@@ -2,7 +2,7 @@
 # Script to build git
 # to a custom location
 
-CUSTOM_BUILD_LOCATION="$HOME/.local/bin"
+CUSTOM_BUILD_LOCATION="$HOME/.local"
 BASHRC_LOCATION="$HOME/.bashrc"
 
 add_to_bashrc() {
