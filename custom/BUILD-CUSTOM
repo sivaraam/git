@@ -1,6 +1,5 @@
 #! /bin/bash
-# Script to build git
-# to a custom location
+# Script to build git to a custom location
 
 CUSTOM_BUILD_LOCATION="$HOME/.local"
 BASHRC_LOCATION="$HOME/.bashrc"
