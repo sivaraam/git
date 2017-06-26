@@ -15,12 +15,12 @@ make install prefix=$CUSTOM_BUILD_LOCATION
 
 # Add custom alias to test git to .bashrc
 # when run for first time
-if [ $CUSTOM_GIT_ALIAS -ne 1 ]
+if [ -z $CUSTOM_GIT_ALIAS ]
 then
   add_to_bashrc "\n# Custom alias for custom build of git"
   add_to_bashrc "# Define variable that denotes definiton of alias"
   add_to_bashrc "export CUSTOM_GIT_ALIAS=1"
-  add_to_bashrc "alias cgit=\"$CUSTOM_BUILD_LOCATION/git\""
+  add_to_bashrc "alias cgit=\"$CUSTOM_BUILD_LOCATION/bin/git\""
 
   # Ensure changes take place in current shell
   source $BASHRC_LOCATION
