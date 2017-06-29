@@ -329,4 +329,11 @@ test_expect_success 'invalid message options when using --fixup' '
 	test_must_fail git commit --fixup HEAD~1 -F log
 '
 
+# grep with PERL regexp support is expected by the following test
+# for a muli-line match
+test_expect_success 'new line found before status message' '
+	GIT_EDITOR="cat >editor-input" git commit &&
+	test_i18ngrep -Pz "(?s)#\n# On branch" editor-input
+'
+
 test_done
