@@ -15,7 +15,7 @@ make install prefix=$CUSTOM_BUILD_LOCATION
 
 # Add custom alias to test git to .bashrc
 # when run for first time
-if [ -z $CUSTOM_GIT_ALIAS ]
+if [ -z "$CUSTOM_GIT_ALIAS" ]
 then
   add_to_bashrc "\n# Custom alias for custom build of git"
   add_to_bashrc "# Define variable that denotes definiton of alias"
