@@ -32,5 +32,20 @@ case "$2,$3" in
   *) ;;
 esac
 
+add_sob() {
+  SOB_TO_ADD='\
+'$1'\
+'
+  # Add new line at beginning of commit message if it's empty
+  sed -i '1s/^\([[:space:]]*\)$\
+' "$2"
+
+  # Add signature before first comment
+  sed -i "/^\#/{i \
+$SOB_TO_ADD
+:loop n; b loop; q;}" "$2"
+
+}
+
 # SOB=$(git var GIT_AUTHOR_IDENT | sed -n 's/^\(.*>\).*$/Signed-off-by: \1/p')
-# grep -qs "^$SOB" "$1" || echo "$SOB" >> "$1"
+# grep -qs "^$SOB" "$1" || add_sob "$SOB" "$1"
