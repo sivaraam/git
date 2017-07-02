@@ -15,6 +15,34 @@
 # SOB=$(git var GIT_AUTHOR_IDENT | sed -n 's/^\(.*>\).*$/Signed-off-by: \1/p')
 # grep -qs "^$SOB" "$1" || echo "$SOB" >> "$1"
 
+# START : NOTES FOR A COMMIT FROM COMMIT MESSAGE
+# Script that allows you to enter notes for a commit while entering the
+# commit message in the editor.
+#
+# **NOTE** : It depends on the "prepare-commit-msg" and "post-commit"
+# hooks. They are to be enabled for it to function correctly.
+NOTES_HEADER='---------- NOTES : START ----------'
+NOTES_FOOTER='----------- NOTES : END -----------'
+GIT_DIR=`git rev-parse --git-dir`
+TEMP_NOTES_FILE="$GIT_DIR/.NOTES_FOR_HEAD"
+
+save_notes_to_file() {
+  sed -n "/$NOTES_HEADER/,/$NOTES_FOOTER/ {
+    /$NOTES_HEADER/n
+    /$NOTES_FOOTER/ !{
+      p
+    }
+  }" "$1" >"$TEMP_NOTES_FILE"
+}
+
+delete_notes_from_message() {
+  sed -i "/$NOTES_HEADER/,/$NOTES_FOOTER/ d" "$1"
+}
+
+grep -q -e "^$NOTES_HEADER" "$1" && save_notes_to_file "$1" && delete_notes_from_message "$1"
+# END : NOTES FOR A COMMIT FROM COMMIT MESSAGE
+
+
 # This example catches duplicate Signed-off-by lines.
 
 test "" = "$(grep '^Signed-off-by: ' "$1" |

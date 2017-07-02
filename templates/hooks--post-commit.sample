@@ -1,0 +1,18 @@
+#! /bin/sh
+# The following script allows you to enter notes for a commit
+# while entering the commit message in the editor.
+# 
+# **NOTE** : It depends on the "commit-msg" and "pre-commit-msg"
+# hooks. They are to be enabled for it to function correctly.
+
+
+# START : NOTES FOR A COMMIT FROM COMMIT MESSAGE
+GIT_DIR=`git rev-parse --git-dir`
+TEMP_NOTES_FILE="$GIT_DIR/.NOTES-FOR-HEAD"
+
+if [ -e "TEMP_NOTES_FILE" ]
+then
+  git notes add -F $TEMP_NOTES_FILE
+  rm $TEMP_NOTES_FILE
+fi
+# END : NOTES FOR A COMMIT FROM COMMIT MESSAGE

@@ -9,8 +9,13 @@
 #
 # To enable this hook, rename this file to "prepare-commit-msg".
 
-# This hook includes three examples.  The first comments out the
-# "Conflicts:" part of a merge commit.
+# This hook includes three examples.  The first one is a script
+# that allows you to enter notes for a commit while entering the
+# commit message in the editor.
+#
+# **NOTE** : The script described above depends on the "commit-msg"
+# and "post-commit" hooks. They are to be enabled for it to function
+# correctly.
 #
 # The second includes the output of "git diff --name-status -r"
 # into the message, just before the "git status" output.  It is
@@ -20,17 +25,37 @@
 # The third example adds a Signed-off-by line to the message, that can
 # still be edited.  This is rarely a good idea.
 
-case "$2,$3" in
-  merge,)
-    @PERL_PATH@ -i.bak -ne 's/^/# /, s/^# #/#/ if /^Conflicts/ .. /#/; print' "$1" ;;
+# START : NOTES FOR A COMMIT FROM COMMIT MESSAGE
+REQUEST_NOTES_TEMPLATE='\
+# Add notes about this commit in the NOTES template below.\
+# DO NOT MODIFY the template to prevent surprises\
+# If you do not wish to add notes for this commit, leave it untouched\
+---------- NOTES : START ----------\
+\
+\
+----------- NOTES : END -----------\
+'
+COMMENT_IDENTIFIER='^# Please enter the .*'
 
-# ,|template,)
+add_notes_template() {
+  sed -i "/$COMMENT_IDENTIFIER/ i\
+$REQUEST_NOTES_TEMPLATE" "$1"
+}
+
+case "$2," in
+  ,|commit,|template,) add_notes_template "$1"
+                       ;;
+esac
+# END : NOTES FOR A COMMIT FROM COMMIT MESSAGE
+
+# case "$2,$3" in
+#  ,|template,)
 #   @PERL_PATH@ -i.bak -pe '
 #      print "\n" . `git diff --cached --name-status -r`
 #	 if /^#/ && $first++ == 0' "$1" ;;
-
-  *) ;;
-esac
+#
+#  *) ;;
+# esac
 
 # SOB=$(git var GIT_AUTHOR_IDENT | sed -n 's/^\(.*>\).*$/Signed-off-by: \1/p')
 # grep -qs "^$SOB" "$1" || echo "$SOB" >> "$1"
