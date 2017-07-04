@@ -10,8 +10,10 @@ add_to_bashrc() {
 
 }
 
-make prefix=$CUSTOM_BUILD_LOCATION
-make install prefix=$CUSTOM_BUILD_LOCATION
+BUILD_OPTS='NO_GETTEXT=1 CURLDIR=/usr/include/x86_64-linux-gnu/curl'
+
+make "$BUILD_OPTS" prefix=$CUSTOM_BUILD_LOCATION
+make "$BUILD_OPTS" install prefix=$CUSTOM_BUILD_LOCATION
 
 # Add custom alias to test git to .bashrc
 # when run for first time
