@@ -10,7 +10,7 @@ add_to_bashrc() {
 
 }
 
-BUILD_OPTS='NO_GETTEXT=1 CURLDIR=/usr/include/x86_64-linux-gnu/curl'
+BUILD_OPTS='NO_GETTEXT=1 CURLDIR=/mnt/Source/git/curl'
 
 make "$BUILD_OPTS" prefix=$CUSTOM_BUILD_LOCATION
 make "$BUILD_OPTS" install prefix=$CUSTOM_BUILD_LOCATION
