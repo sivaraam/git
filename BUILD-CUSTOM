@@ -1,7 +1,7 @@
 #! /bin/bash
 # Script to do a custom "global" git build
-# This hides the other git executable's that
-# aren't aliases if found
+# This hides the other git executable's if
+# when exectuted for the first time
 
 BUILD_OPTS='NO_GETTEXT=1 CURLDIR=/mnt/Source/git/curl'
 
@@ -37,6 +37,8 @@ setup_git_alias() {
   add_to_bashrc "\n# Custom alias existing git that would get hidden"
   add_to_bashrc "alias $HIDDEN_GIT_ALIAS=\"$CURR_GIT\""
   add_to_bashrc "alias git=\"$1\""
+  add_to_bashrc "# Define variable that denotes definiton of alias"
+  add_to_bashrc "export CUSTOM_GIT_ALIAS=1"
 
 }
 
@@ -47,7 +49,7 @@ make "$BUILD_OPTS" prefix=$CUSTOM_BUILD_LOCATION
 make "$BUILD_OPTS" install prefix=$CUSTOM_BUILD_LOCATION
 
 # Setup alias if git is present
-if (type git 1>/dev/null 2>/dev/null) && [ "$(type -t git)" != "alias" ]
+if (type git 1>/dev/null 2>/dev/null) && [ -z "$CUSTOM_GIT_ALIAS" ]
 then
   CUSTOM_GIT_BINARY="$CUSTOM_BUILD_LOCATION/bin/git"
   setup_git_alias $CUSTOM_GIT_BINARY
