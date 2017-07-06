@@ -1,0 +1,24 @@
+#!/bin/bash
+# Script that does 'builds' git and
+# adds custom alias to test executable
+
+. BUILD-CUSTOM-COMMON
+
+# Done only during the first time
+setup_alias() {
+  TEST_GIT="$(pwd)/bin-wrappers/git"
+  TEST_GIT_ALIAS="tgit"
+
+  add_to_bashrc "\n# Custom alias for test executable"
+  add_to_bashrc "alias $TEST_GIT_ALIAS=\"$TEST_GIT\""
+  add_to_bashrc "# Define variable that denotes existence of '$TEST_GIT_ALIAS' alias"
+  add_to_bashrc "export CUSTOM_TEST_GIT_ALIAS=1"
+}
+
+make "$BUILD_OPTS"
+
+if [ -z "$CUSTOM_TEST_GIT_ALIAS" ]
+then
+  echo "ALERT: Adding alias for built git"
+  setup_alias
+fi
