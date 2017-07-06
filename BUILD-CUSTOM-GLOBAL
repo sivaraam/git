@@ -1,0 +1,47 @@
+#!/bin/bash
+# Script to do a custom git 'installation'
+
+. BUILD-CUSTOM-COMMON
+
+create_build_dir() {
+  BUILD_DIR="$1"
+  if (mkdir -p $BUILD_DIR 2>/dev/null)
+  then
+    :
+  else
+    echo "Note: Super user rights required to create build directory: $BUILD_DIR"
+    sudo mkdir -p $BUILD_DIR
+  fi
+}
+
+# Add custom alias for git that gets hidden
+# due to this installation
+setup_alias() {
+
+  # Assumes git is present for sure
+  get_current_git() {
+    echo "$(type -p git)"
+  }
+
+  HIDDEN_GIT_ALIAS="hgit"
+  CURR_GIT=$(get_current_git)
+  echo "ALERT: adding alias $HIDDEN_GIT_ALIAS for $CURR_GIT"
+  add_to_bashrc "\n# Custom alias existing git that would get hidden"
+  add_to_bashrc "alias $HIDDEN_GIT_ALIAS=\"$CURR_GIT\""
+  add_to_bashrc "alias git=\"$1\""
+  add_to_bashrc "# Define variable that denotes existence of 'git' alias"
+  add_to_bashrc "export CUSTOM_GLOBAL_GIT_ALIAS=1"
+
+}
+
+CUSTOM_BUILD_LOCATION="$HOME/.local"
+create_build_dir $CUSTOM_BUILD_LOCATION
+
+make "$BUILD_OPTS" prefix=$CUSTOM_BUILD_LOCATION
+make "$BUILD_OPTS" install prefix=$CUSTOM_BUILD_LOCATION
+
+if (type git 1>/dev/null 2>/dev/null) && [ -z "$CUSTOM_GLOBAL_GIT_ALIAS" ]
+then
+  CUSTOM_GIT_BINARY="$CUSTOM_BUILD_LOCATION/bin/git"
+  setup_alias $CUSTOM_GIT_BINARY
+fi

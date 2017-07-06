@@ -1,0 +1,7 @@
+BUILD_OPTS='NO_GETTEXT=1 CURLDIR=/mnt/Source/git/curl'
+
+add_to_bashrc() {
+  BASHRC_LOCATION="$HOME/.bashrc"
+  echo -e  "$1" >> $BASHRC_LOCATION
+  source $BASHRC_LOCATION
+}
