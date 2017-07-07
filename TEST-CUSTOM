@@ -7,7 +7,7 @@
 
 # Temporarily alias custom git command to git
 # to ensure test uses custom build
-alias git=cgit
+alias git=tgit
 
 cd t
 make DEFAULT_TEST_TARGET=prove GIT_PROVE_OPTS='--timer --jobs 16' test |  grep -v '^ok'
