@@ -12,6 +12,9 @@
 
 if [ "$1" == "global" ] || [ "$1" == "g" ]
 then
+  echo "WARNING: Doing a global build."
+  echo "This might 'hide' existing git installation under 'hgit'"
+  echo "Read the script for more info"
   . BUILD-CUSTOM-GLOBAL
 else
   . BUILD-CUSTOM-TEST
