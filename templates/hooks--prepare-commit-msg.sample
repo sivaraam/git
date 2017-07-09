@@ -9,27 +9,85 @@
 #
 # To enable this hook, rename this file to "prepare-commit-msg".
 
-# This hook includes three examples.
+# This hook includes two examples.
 #
-# The second includes the output of "git diff --name-status -r"
-# into the message, just before the "git status" output.  It is
-# commented because it doesn't cope with --amend or with squashed
-# commits.
+# The first includes the name status of the changes that are
+# going to be committed, into the message. It doesn't get invoked
+# for squashed commits as it doesn't cope with it.
+# It misbehaves in one particular case. In case the commit being
+# amended deleted (added) a file and the same file is added (deleted)
+# while amending (with or without modifications then the name status
+# doesn't match the original status of the file.
 #
-# The third example adds a Signed-off-by line to the message, that can
+# The second example adds a Signed-off-by line to the message, that can
 # still be edited.  This is rarely a good idea.
 
 COMMIT_MSG_FILE=$1
 COMMIT_SOURCE=$2
 SHA1=$3
 
-# case "$COMMIT_SOURCE,$SHA1" in
-#  ,|template,)
-#    @PERL_PATH@ -i.bak -pe '
-#       print "\n" . `git diff --cached --name-status -r`
-# 	 if /^#/ && $first++ == 0' "$COMMIT_MSG_FILE" ;;
-#  *) ;;
-# esac
+GIT_DIR=`git rev-parse --git-dir`
+SHOW_OUTPUT_TEMP="$GIT_DIR/.show-temp"
+DIFF_CACHED_OUTPUT_TEMP="$GIT_DIR/.diff-cached-temp"
+NAME_STATUS_AMEND_TEMP="$GIT_DIR/.name-status-amend-temp"
+
+generate_diff_cached_output () {
+  {
+    git diff --cached --name-status -r
+  } >"$DIFF_CACHED_OUTPUT_TEMP"
+}
+
+generate_show_output () {
+  {
+    git show --oneline --name-status
+  } >"$SHOW_OUTPUT_TEMP"
+}
+
+cleanup_files () {
+  rm "$@"
+}
+
+add_name_status () {
+  generate_diff_cached_output
+
+  perl -i.bak -pe 'print "\n" . `cat '$DIFF_CACHED_OUTPUT_TEMP'` if (/^#/ && $first++ == 0)' "$COMMIT_MSG_FILE"
+
+  cleanup_files "$DIFF_CACHED_OUTPUT_TEMP"
+}
+
+add_name_status_for_amend () {
+  generate_diff_cached_output
+  generate_show_output
+
+  {
+    cat "$SHOW_OUTPUT_TEMP" | @PERL_PATH@ -n -e 'print unless($first_line++ == 0)' | cat - "$DIFF_CACHED_OUTPUT_TEMP" | sort -k 2 -u
+  } >"$NAME_STATUS_AMEND_TEMP"
+
+  perl -i.bak -pe 'print "\n" . `cat '$NAME_STATUS_AMEND_TEMP'` if (/^#/ && $first++ == 0)' "$COMMIT_MSG_FILE"
+
+  cleanup_files "$NAME_STATUS_AMEND_TEMP" "$SHOW_OUTPUT_TEMP" "$DIFF_CACHED_OUTPUT_TEMP"
+}
+
+is_amend () {
+   test "$1" = 'HEAD'
+   return $?
+}
+
+case "$COMMIT_SOURCE" in
+  squash) ;;
+
+  *)
+    if test -z "$SHA1"
+    then
+      add_name_status
+    else
+      if is_amend "$SHA1"
+      then
+        add_name_status_for_amend
+      fi
+    fi
+    ;;
+esac
 
 # SOB=$(git var GIT_AUTHOR_IDENT | sed -n 's/^\(.*>\).*$/Signed-off-by: \1/p')
 # git interpret-trailers --in-place --trailer "$SOB" "$COMMIT_MSG_FILE"

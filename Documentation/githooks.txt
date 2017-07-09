@@ -121,6 +121,10 @@ it is not suppressed by the `--no-verify` option.  A non-zero exit
 means a failure of the hook and aborts the commit.  It should not
 be used as replacement for pre-commit hook.
 
+The sample `prepare-commit-msg` hook that comes with Git adds
+the name-status of the files, about to be committed, to the
+commit message.
+
 commit-msg
 ~~~~~~~~~~
 
