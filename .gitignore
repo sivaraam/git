@@ -218,3 +218,5 @@
 *.pdb
 /Debug/
 /Release/
+.project
+.gitignore
