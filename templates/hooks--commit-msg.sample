@@ -24,7 +24,7 @@
 NOTES_HEADER='---------- NOTES : START ----------'
 NOTES_FOOTER='----------- NOTES : END -----------'
 GIT_DIR=`git rev-parse --git-dir`
-TEMP_NOTES_FILE="$GIT_DIR/.NOTES_FOR_HEAD"
+TEMP_NOTES_FILE="$GIT_DIR/NOTES-FOR-HEAD"
 
 save_notes_to_file() {
   sed -n "/$NOTES_HEADER/,/$NOTES_FOOTER/ {

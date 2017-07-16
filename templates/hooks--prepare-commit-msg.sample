@@ -33,8 +33,7 @@ REQUEST_NOTES_TEMPLATE='\
 ---------- NOTES : START ----------\
 \
 \
------------ NOTES : END -----------\
-'
+----------- NOTES : END -----------'
 COMMENT_IDENTIFIER='^# Please enter the .*'
 
 add_notes_template() {
