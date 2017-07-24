@@ -10,6 +10,8 @@
 # A 'Global build' hides the other git executable's,
 # when executed for the first time.
 
+make clean
+
 if [ "$1" == "global" ] || [ "$1" == "g" ]
 then
   echo "WARNING: Doing a global build."
