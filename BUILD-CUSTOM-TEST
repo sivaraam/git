@@ -15,9 +15,18 @@ setup_alias() {
   add_to_bashrc "export CUSTOM_TEST_GIT_ALIAS=1"
 }
 
-make "$BUILD_OPTS"
+build() {
+  make "$BUILD_OPTS"
+}
 
-if [ -z "$CUSTOM_TEST_GIT_ALIAS" ]
+build
+if [ $? != 0 ]
+then
+  make clean
+  build
+fi
+
+if [ $? == 0 ] && [ -z "$CUSTOM_TEST_GIT_ALIAS" ]
 then
   echo "ALERT: Adding alias for built git"
   setup_alias

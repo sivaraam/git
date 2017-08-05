@@ -34,13 +34,24 @@ setup_alias() {
 
 }
 
+build() {
+  make "$1" prefix="$2"
+  make "$1" install prefix="$2"
+}
+
 CUSTOM_BUILD_LOCATION="$HOME/.local"
 create_build_dir $CUSTOM_BUILD_LOCATION
 
-make "$BUILD_OPTS" prefix=$CUSTOM_BUILD_LOCATION
-make "$BUILD_OPTS" install prefix=$CUSTOM_BUILD_LOCATION
+set -x
 
-if (type git 1>/dev/null 2>/dev/null) && [ -z "$CUSTOM_GLOBAL_GIT_ALIAS" ]
+build "$BUILD_OPTS" "$CUSTOM_BUILD_LOCATION"
+if [ $? != 0 ]
+then
+  make clean
+  build "$BUILD_OPTS" "$CUSTOM_BUILD_LOCATION"
+fi
+
+if [ $? == 0 ] && (type git 1>/dev/null 2>/dev/null) && [ -z "$CUSTOM_GLOBAL_GIT_ALIAS" ]
 then
   CUSTOM_GIT_BINARY="$CUSTOM_BUILD_LOCATION/bin/git"
   setup_alias $CUSTOM_GIT_BINARY
