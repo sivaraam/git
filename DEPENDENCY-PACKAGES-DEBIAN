@@ -1,5 +1,5 @@
-zlib
-Package: zlib1g-dev
+zlib: zlib1g-dev
 
-Openssl headers
-Package: libssl-dev
+Openssl headers: libssl-dev
+
+curl: libcurl4-openssl-dev:amd64
