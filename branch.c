@@ -184,6 +184,9 @@ int validate_new_branchname(const char *name, struct strbuf *ref,
 	if (strbuf_check_branch_ref(ref, name))
 		die(_("'%s' is not a valid branch name."), name);
 
+	if (!strcmp(name, "HEAD"))
+		die(_("it does not make sense to create 'HEAD' manually"));
+
 	if (!ref_exists(ref->buf))
 		return 0;
 	else if (!force && !attr_only)
