@@ -1,4 +1,5 @@
 #include "cache.h"
+#include "config.h"
 #include "refs.h"
 #include "commit.h"
 #include "tree-walk.h"
@@ -102,17 +103,39 @@ struct archiver_context {
 	struct directory *bottom;
 };
 
+static const struct attr_check *get_archive_attrs(const char *path)
+{
+	static struct attr_check *check;
+	if (!check)
+		check = attr_check_initl("export-ignore", "export-subst", NULL);
+	return git_check_attr(path, check) ? NULL : check;
+}
+
+static int check_attr_export_ignore(const struct attr_check *check)
+{
+	return check && ATTR_TRUE(check->items[0].value);
+}
+
+static int check_attr_export_subst(const struct attr_check *check)
+{
+	return check && ATTR_TRUE(check->items[1].value);
+}
+
+static int should_queue_directories(const struct archiver_args *args)
+{
+	return args->pathspec.has_wildcard;
+}
+
 static int write_archive_entry(const unsigned char *sha1, const char *base,
 		int baselen, const char *filename, unsigned mode, int stage,
 		void *context)
 {
 	static struct strbuf path = STRBUF_INIT;
-	static struct attr_check *check;
 	struct archiver_context *c = context;
 	struct archiver_args *args = c->args;
 	write_archive_entry_fn_t write_entry = c->write_entry;
-	const char *path_without_prefix;
 	int err;
+	const char *path_without_prefix;
 
 	args->convert = 0;
 	strbuf_reset(&path);
@@ -124,12 +147,12 @@ static int write_archive_entry(const unsigned char *sha1, const char *base,
 		strbuf_addch(&path, '/');
 	path_without_prefix = path.buf + args->baselen;
 
-	if (!check)
-		check = attr_check_initl("export-ignore", "export-subst", NULL);
-	if (!git_check_attr(path_without_prefix, check)) {
-		if (ATTR_TRUE(check->items[0].value))
+	if (!S_ISDIR(mode) || !should_queue_directories(args)) {
+		const struct attr_check *check;
+		check = get_archive_attrs(path_without_prefix);
+		if (check_attr_export_ignore(check))
 			return 0;
-		args->convert = ATTR_TRUE(check->items[1].value);
+		args->convert = check_attr_export_subst(check);
 	}
 
 	if (S_ISDIR(mode) || S_ISGITLINK(mode)) {
@@ -203,6 +226,17 @@ static int queue_or_write_archive_entry(const unsigned char *sha1,
 	}
 
 	if (S_ISDIR(mode)) {
+		size_t baselen = base->len;
+		const struct attr_check *check;
+
+		/* Borrow base, but restore its original value when done. */
+		strbuf_addstr(base, filename);
+		strbuf_addch(base, '/');
+		check = get_archive_attrs(base->buf);
+		strbuf_setlen(base, baselen);
+
+		if (check_attr_export_ignore(check))
+			return 0;
 		queue_directory(sha1, base, filename,
 				mode, stage, c);
 		return READ_TREE_RECURSIVE;
@@ -256,7 +290,7 @@ int write_archive_entries(struct archiver_args *args,
 	}
 
 	err = read_tree_recursive(args->tree, "", 0, 0, &args->pathspec,
-				  args->pathspec.has_wildcard ?
+				  should_queue_directories(args) ?
 				  queue_or_write_archive_entry :
 				  write_archive_entry_buf,
 				  &context);
@@ -360,7 +394,7 @@ static void parse_treeish_arg(const char **argv,
 	if (get_sha1(name, oid.hash))
 		die("Not a valid object name");
 
-	commit = lookup_commit_reference_gently(oid.hash, 1);
+	commit = lookup_commit_reference_gently(&oid, 1);
 	if (commit) {
 		commit_sha1 = commit->object.oid.hash;
 		archive_time = commit->date;
@@ -369,7 +403,7 @@ static void parse_treeish_arg(const char **argv,
 		archive_time = time(NULL);
 	}
 
-	tree = parse_tree_indirect(oid.hash);
+	tree = parse_tree_indirect(&oid);
 	if (tree == NULL)
 		die("not a tree object");
 
@@ -383,7 +417,7 @@ static void parse_treeish_arg(const char **argv,
 		if (err || !S_ISDIR(mode))
 			die("current working directory is untracked");
 
-		tree = parse_tree_indirect(tree_oid.hash);
+		tree = parse_tree_indirect(&tree_oid);
 	}
 	ar_args->tree = tree;
 	ar_args->commit_sha1 = commit_sha1;

@@ -42,6 +42,7 @@ test_decode_color () {
 		function name(n) {
 			if (n == 0) return "RESET";
 			if (n == 1) return "BOLD";
+			if (n == 7) return "REVERSE";
 			if (n == 30) return "BLACK";
 			if (n == 31) return "RED";
 			if (n == 32) return "GREEN";
@@ -999,6 +1000,7 @@ test_copy_bytes () {
 			my $s;
 			my $nread = sysread(STDIN, $s, $len);
 			die "cannot read: $!" unless defined($nread);
+			last unless $nread;
 			print $s;
 			$len -= $nread;
 		}
