@@ -16,7 +16,7 @@ setup_alias() {
 }
 
 build() {
-  make "$BUILD_OPTS"
+  make $BUILD_OPTS
 }
 
 build

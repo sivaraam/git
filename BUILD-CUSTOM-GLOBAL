@@ -35,8 +35,8 @@ setup_alias() {
 }
 
 build() {
-  make "$1" prefix="$2"
-  make "$1" install prefix="$2"
+  make $1 prefix="$2"
+  make $1 install prefix="$2"
 }
 
 CUSTOM_BUILD_LOCATION="$HOME/.local"
