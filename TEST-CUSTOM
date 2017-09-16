@@ -9,5 +9,7 @@
 # to ensure test uses custom build
 alias git=tgit
 
+IGNORE_HTTP_TEST='t5561'
+
 cd t
-make DEFAULT_TEST_TARGET=prove GIT_PROVE_OPTS='--timer --jobs 16' test |  grep -v '^ok'
+GIT_SKIP_TESTS="$IGNORE_HTTP_TEST" make DEFAULT_TEST_TARGET=prove GIT_PROVE_OPTS='--timer --jobs 16' test |  grep -v '^ok'
