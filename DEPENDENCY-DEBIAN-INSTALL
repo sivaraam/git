@@ -1,0 +1,17 @@
+#! /bin/bash
+# Install/Remove the package dependencies on debian
+
+zlib='zlib1g-dev'
+openssl='libssl-dev'
+curl='libcurl4-openssl-dev'
+
+DEPENDENCY="$zlib $openssl $curl"
+
+if [ "$1" != "rem" ]
+then
+    echo "Installing dependencies ..."
+    sudo apt-get update && sudo apt-get install $DEPENDENCY
+else
+    echo "Removing dependencies ..."
+    sudo apt-get remove $DEPENDENCY
+fi

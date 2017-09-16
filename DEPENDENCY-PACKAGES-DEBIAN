@@ -1,5 +1,0 @@
-zlib: zlib1g-dev
-
-Openssl headers: libssl-dev
-
-curl: libcurl4-openssl-dev:amd64
