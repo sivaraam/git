@@ -218,3 +218,7 @@
 *.pdb
 /Debug/
 /Release/
+
+# Custom ignores
+NOTES/
+PATCHES/
