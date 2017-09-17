@@ -458,11 +458,38 @@ static void reject_rebase_or_bisect_branch(const char *target)
 	free_worktrees(worktrees);
 }
 
+static void get_error_msg(struct strbuf* error_msg, const char* oldname, unsigned old_branch_exists,
+			  const char* newname, enum branch_validation_result res)
+{
+	const char* connector_string = _(", and ");
+
+	if (!old_branch_exists) {
+		strbuf_addf(error_msg, _("branch '%s' doesn't exist"), oldname);
+	}
+
+	switch (res) {
+		case BRANCH_EXISTS_NO_FORCE:
+			strbuf_addf(error_msg, "%s", (!old_branch_exists) ? connector_string : "");
+			strbuf_addf(error_msg,_("branch '%s' already exists"), newname);
+			break;
+		case CANNOT_FORCE_UPDATE_CURRENT_BRANCH:
+			strbuf_addf(error_msg, "%s", (!old_branch_exists) ? connector_string : "");
+			strbuf_addstr(error_msg, _("cannot force update the current branch"));
+			break;
+		case INVALID_BRANCH_NAME:
+			strbuf_addf(error_msg, "%s", (!old_branch_exists) ? connector_string : "");
+			strbuf_addf(error_msg, _("branch name '%s' is invalid"), newname);
+			break;
+	}
+}
+
 static void copy_or_rename_branch(const char *oldname, const char *newname, int copy, int force)
 {
 	struct strbuf oldref = STRBUF_INIT, newref = STRBUF_INIT, logmsg = STRBUF_INIT;
 	struct strbuf oldsection = STRBUF_INIT, newsection = STRBUF_INIT;
 	int recovery = 0;
+	struct strbuf error_msg = STRBUF_INIT, empty = STRBUF_INIT;
+	enum branch_validation_result res;
 
 	if (!oldname) {
 		if (copy)
@@ -471,15 +498,13 @@ static void copy_or_rename_branch(const char *oldname, const char *newname, int 
 			die(_("cannot rename the current branch while not on any."));
 	}
 
-	if (strbuf_check_branch_ref(&oldref, oldname)) {
+	if (strbuf_check_branch_ref(&oldref, oldname) && ref_exists(oldref.buf))
+	{
 		/*
 		 * Bad name --- this could be an attempt to rename a
 		 * ref that we used to allow to be created by accident.
 		 */
-		if (ref_exists(oldref.buf))
-			recovery = 1;
-		else
-			die(_("Invalid branch name: '%s'"), oldname);
+		recovery = 1;
 	}
 
 	/*
@@ -487,9 +512,13 @@ static void copy_or_rename_branch(const char *oldname, const char *newname, int 
 	 * cause the worktree to become inconsistent with HEAD, so allow it.
 	 */
 	if (!strcmp(oldname, newname))
-		validate_branchname(newname, &newref, 0);
+		res = validate_branchname(newname, &newref, 1);
 	else
-		validate_new_branchname(newname, &newref, force, 0);
+		res = validate_new_branchname(newname, &newref, force, 1);
+
+	get_error_msg(&error_msg, oldname, ref_exists(oldref.buf), newname, res);
+	if (strbuf_cmp(&error_msg, &empty))
+		die("%s", error_msg.buf);
 
 	reject_rebase_or_bisect_branch(oldref.buf);
 
@@ -530,6 +559,8 @@ static void copy_or_rename_branch(const char *oldname, const char *newname, int 
 		die(_("Branch is copied, but update of config-file failed"));
 	strbuf_release(&oldsection);
 	strbuf_release(&newsection);
+	strbuf_release(&error_msg);
+	strbuf_release(&empty);
 }
 
 static GIT_PATH_FUNC(edit_description, "EDIT_DESCRIPTION")
