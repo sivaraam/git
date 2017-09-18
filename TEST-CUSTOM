@@ -5,7 +5,5 @@
 # before testing
 . BUILD-CUSTOM
 
-IGNORE_HTTP_TEST='t5561'
-
 cd t
-GIT_SKIP_TESTS="$IGNORE_HTTP_TEST" make DEFAULT_TEST_TARGET=prove GIT_PROVE_OPTS='--timer --jobs 16' test |  grep -v '^ok'
+make DEFAULT_TEST_TARGET=prove GIT_PROVE_OPTS='--timer --jobs 16' test |  grep -v '^ok'
