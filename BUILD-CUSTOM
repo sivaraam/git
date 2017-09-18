@@ -10,12 +10,23 @@
 # A 'Global build' hides the other git executable's,
 # when executed for the first time.
 
-if [ "$1" == "global" ] || [ "$1" == "g" ]
+build () {
+  if [ "$1" == "global" ] || [ "$1" == "g" ]
+  then
+    echo "WARNING: Doing a global build."
+    echo "This might 'hide' existing git installation under 'hgit'"
+    echo "Read the script for more info"
+    . BUILD-CUSTOM-GLOBAL
+  else
+    . BUILD-CUSTOM-TEST
+  fi
+
+}
+
+if [ "$1" == "clean" ] || [ "$1" == "c" ]
 then
-  echo "WARNING: Doing a global build."
-  echo "This might 'hide' existing git installation under 'hgit'"
-  echo "Read the script for more info"
-  . BUILD-CUSTOM-GLOBAL
+  make clean
+  build "$2"
 else
-  . BUILD-CUSTOM-TEST
+  build "$2"
 fi

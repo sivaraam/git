@@ -42,14 +42,7 @@ build() {
 CUSTOM_BUILD_LOCATION="$HOME/.local"
 create_build_dir $CUSTOM_BUILD_LOCATION
 
-set -x
-
 build "$BUILD_OPTS" "$CUSTOM_BUILD_LOCATION"
-if [ $? != 0 ]
-then
-  make clean
-  build "$BUILD_OPTS" "$CUSTOM_BUILD_LOCATION"
-fi
 
 if [ $? == 0 ] && (type git 1>/dev/null 2>/dev/null) && [ -z "$CUSTOM_GLOBAL_GIT_ALIAS" ]
 then
