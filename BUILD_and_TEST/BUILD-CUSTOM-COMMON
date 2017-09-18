@@ -8,3 +8,19 @@ add_to_bashrc() {
 
 # Move to the location where the Makefile is present
 cd ..
+
+# Colour Escape codes
+WARN='\033[0;31m'
+ALERT='\033[1;32m'
+NC='\033[0m'
+
+# Function that notifies an user about a message.
+# Notification is done in different colour for
+# colour enabled shells.
+notify () {
+   echo -e "${ALERT}ALERT:${NC} $1"
+}
+
+warn () {
+   echo -e "${WARN}WARNING:${NC} $1"
+}

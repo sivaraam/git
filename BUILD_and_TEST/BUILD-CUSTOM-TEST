@@ -23,6 +23,6 @@ build
 
 if [ $? == 0 ] && [ -z "$CUSTOM_TEST_GIT_ALIAS" ]
 then
-  echo "ALERT: Adding alias for built git"
+  notify "Adding alias for test build"
   setup_alias
 fi

@@ -9,7 +9,7 @@ create_build_dir() {
   then
     :
   else
-    echo "Note: Super user rights required to create build directory: $BUILD_DIR"
+    notify "Super user rights required to create build directory: $BUILD_DIR"
     sudo mkdir -p $BUILD_DIR
   fi
 }
@@ -25,7 +25,7 @@ setup_alias() {
 
   HIDDEN_GIT_ALIAS="hgit"
   CURR_GIT=$(get_current_git)
-  echo "ALERT: adding alias $HIDDEN_GIT_ALIAS for $CURR_GIT"
+  notify "adding alias $HIDDEN_GIT_ALIAS for $CURR_GIT"
   add_to_bashrc "\n# Custom alias existing git that would get hidden"
   add_to_bashrc "alias $HIDDEN_GIT_ALIAS=\"$CURR_GIT\""
   add_to_bashrc "alias git=\"$1\""
@@ -33,6 +33,10 @@ setup_alias() {
   add_to_bashrc "export CUSTOM_GLOBAL_GIT_ALIAS=1"
 
 }
+
+warn "Doing a global build."
+warn "This might 'hide' existing git installation under 'hgit'"
+warn "Read the script for more info"
 
 build() {
   make $1 prefix="$2"
