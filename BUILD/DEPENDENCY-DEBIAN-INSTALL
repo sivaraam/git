@@ -9,9 +9,9 @@ DEPENDENCY="$zlib $openssl $curl"
 
 if [ "$1" != "rem" ]
 then
-    echo "Installing dependencies ..."
+    echo "Installing dependencies: $DEPENDENCY"
     sudo apt-get update && sudo apt-get install $DEPENDENCY
 else
-    echo "Removing dependencies ..."
+    echo "Removing dependencies: $DEPENDENCY"
     sudo apt-get remove $DEPENDENCY
 fi
