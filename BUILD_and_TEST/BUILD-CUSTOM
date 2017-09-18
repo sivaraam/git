@@ -23,6 +23,9 @@ build () {
 
 }
 
+# Move to the location where the Makefile is present
+cd ..
+
 if [ "$1" == "clean" ] || [ "$1" == "c" ]
 then
   make clean

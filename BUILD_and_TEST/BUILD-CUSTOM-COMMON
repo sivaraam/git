@@ -5,6 +5,3 @@ add_to_bashrc() {
   echo -e  "$1" >> $BASHRC_LOCATION
   source $BASHRC_LOCATION
 }
-
-# Move to the location where the Makefile is present
-cd ..
