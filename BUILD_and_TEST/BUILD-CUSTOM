@@ -28,5 +28,5 @@ then
   make -C .. clean
   build "$2"
 else
-  build "$2"
+  build "$1"
 fi
