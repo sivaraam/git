@@ -5,10 +5,6 @@
 # before testing
 . BUILD-CUSTOM
 
-# Temporarily alias custom git command to git
-# to ensure test uses custom build
-alias git=tgit
-
 IGNORE_HTTP_TEST='t5561'
 
 cd t
