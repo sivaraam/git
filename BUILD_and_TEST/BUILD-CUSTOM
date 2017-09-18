@@ -23,12 +23,9 @@ build () {
 
 }
 
-# Move to the location where the Makefile is present
-cd ..
-
 if [ "$1" == "clean" ] || [ "$1" == "c" ]
 then
-  make clean
+  make -C .. clean
   build "$2"
 else
   build "$2"
