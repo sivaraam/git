@@ -218,8 +218,3 @@
 *.pdb
 /Debug/
 /Release/
-
-# custom ignores
-PATCHES/
-NOTES/
-.project
