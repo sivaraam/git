@@ -6,7 +6,7 @@
 
 # Done only during the first time
 setup_alias() {
-  TEST_GIT="$(pwd)/git"
+  TEST_GIT="$(pwd)/bin-wrappers/git"
   TEST_GIT_ALIAS="tgit"
 
   add_to_bashrc "\n# Custom alias for test executable"
