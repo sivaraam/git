@@ -11,21 +11,21 @@
  *   - start_name is the name of the existing branch that the new branch should
  *     start from
  *
- *   - force enables overwriting an existing (non-head) branch
+ *   - track causes the new branch to be configured to merge the remote branch
+ *     that start_name is a tracking branch for (if any).
  *
- *   - reflog creates a reflog for the branch
+ *   - force enables overwriting an existing (non-head) branch
  *
  *   - clobber_head_ok allows the currently checked out (hence existing)
  *     branch to be overwritten; without 'force', it has no effect.
  *
- *   - quiet suppresses tracking information
+ *   - reflog creates a reflog for the branch
  *
- *   - track causes the new branch to be configured to merge the remote branch
- *     that start_name is a tracking branch for (if any).
+ *   - quiet suppresses tracking information
  */
 void create_branch(const char *name, const char *start_name,
-		   int force, int reflog,
-		   int clobber_head_ok, int quiet, enum branch_track track);
+		   enum branch_track track, int force, int clobber_head_ok,
+		   int reflog, int quiet);
 
 /*
  * Check if 'name' can be a valid name for a branch; die otherwise.
