@@ -1438,9 +1438,15 @@ int strbuf_check_branch_ref(struct strbuf *sb, const char *name)
 		strbuf_branchname(sb, name, INTERPRET_BRANCH_LOCAL);
 	else
 		strbuf_addstr(sb, name);
-	if (name[0] == '-')
+	if (*name == '-')
 		return -1;
+
 	strbuf_splice(sb, 0, 0, "refs/heads/", 11);
+
+	/* HEAD is not to be used as a branch name */
+	if(!strcmp(sb->buf, "refs/heads/HEAD"))
+		return -1;
+
 	return check_refname_format(sb->buf, 0);
 }
 
