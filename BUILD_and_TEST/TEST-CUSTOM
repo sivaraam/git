@@ -5,4 +5,4 @@
 # right directory and get access to common variables
 . BUILD-CUSTOM-COMMON
 
-make $BUILD_OPTS DEFAULT_TEST_TARGET=prove GIT_PROVE_OPTS='--timer --jobs 16' test |  grep -v '^ok'
+make $BUILD_OPTS DEFAULT_TEST_TARGET=prove GIT_PROVE_OPTS='--timer --jobs 16' test
