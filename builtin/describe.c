@@ -7,12 +7,12 @@
 #include "builtin.h"
 #include "exec_cmd.h"
 #include "parse-options.h"
+#include "revision.h"
 #include "diff.h"
 #include "hashmap.h"
 #include "argv-array.h"
 #include "run-command.h"
 
-#define SEEN		(1u << 0)
 #define MAX_TAGS	(FLAG_BITS - 1)
 
 static const char * const describe_usage[] = {
@@ -55,10 +55,13 @@ static const char *prio_names[] = {
 };
 
 static int commit_name_cmp(const void *unused_cmp_data,
-			   const struct commit_name *cn1,
-			   const struct commit_name *cn2,
+			   const void *entry,
+			   const void *entry_or_key,
 			   const void *peeled)
 {
+	const struct commit_name *cn1 = entry;
+	const struct commit_name *cn2 = entry_or_key;
+
 	return oidcmp(&cn1->peeled, peeled ? peeled : &cn2->peeled);
 }
 
@@ -126,13 +129,24 @@ static void add_to_known_names(const char *path,
 
 static int get_name(const char *path, const struct object_id *oid, int flag, void *cb_data)
 {
-	int is_tag = starts_with(path, "refs/tags/");
+	int is_tag = 0;
 	struct object_id peeled;
 	int is_annotated, prio;
+	const char *path_to_match = NULL;
 
-	/* Reject anything outside refs/tags/ unless --all */
-	if (!all && !is_tag)
+	if (skip_prefix(path, "refs/tags/", &path_to_match)) {
+		is_tag = 1;
+	} else if (all) {
+		if ((exclude_patterns.nr || patterns.nr) &&
+		    !skip_prefix(path, "refs/heads/", &path_to_match) &&
+		    !skip_prefix(path, "refs/remotes/", &path_to_match)) {
+			/* Only accept reference of known type if there are match/exclude patterns */
+			return 0;
+		}
+	} else {
+		/* Reject anything outside refs/tags/ unless --all */
 		return 0;
+	}
 
 	/*
 	 * If we're given exclude patterns, first exclude any tag which match
@@ -141,11 +155,8 @@ static int get_name(const char *path, const struct object_id *oid, int flag, voi
 	if (exclude_patterns.nr) {
 		struct string_list_item *item;
 
-		if (!is_tag)
-			return 0;
-
 		for_each_string_list_item(item, &exclude_patterns) {
-			if (!wildmatch(item->string, path + 10, 0))
+			if (!wildmatch(item->string, path_to_match, 0))
 				return 0;
 		}
 	}
@@ -155,22 +166,22 @@ static int get_name(const char *path, const struct object_id *oid, int flag, voi
 	 * pattern.
 	 */
 	if (patterns.nr) {
+		int found = 0;
 		struct string_list_item *item;
 
-		if (!is_tag)
-			return 0;
-
 		for_each_string_list_item(item, &patterns) {
-			if (!wildmatch(item->string, path + 10, 0))
+			if (!wildmatch(item->string, path_to_match, 0)) {
+				found = 1;
 				break;
-
-			/* If we get here, no pattern matched. */
-			return 0;
+			}
 		}
+
+		if (!found)
+			return 0;
 	}
 
 	/* Is it annotated? */
-	if (!peel_ref(path, peeled.hash)) {
+	if (!peel_ref(path, &peeled)) {
 		is_annotated = !!oidcmp(oid, &peeled);
 	} else {
 		oidcpy(&peeled, oid);
@@ -503,9 +514,9 @@ int cmd_describe(int argc, const char **argv, const char *prefix)
 		return cmd_name_rev(args.argc, args.argv, prefix);
 	}
 
-	hashmap_init(&names, (hashmap_cmp_fn) commit_name_cmp, NULL, 0);
+	hashmap_init(&names, commit_name_cmp, NULL, 0);
 	for_each_rawref(get_name, NULL);
-	if (!names.size && !always)
+	if (!hashmap_get_size(&names) && !always)
 		die(_("No names found, cannot describe anything."));
 
 	if (argc == 0) {
@@ -532,7 +543,9 @@ int cmd_describe(int argc, const char **argv, const char *prefix)
 			}
 		} else if (dirty) {
 			static struct lock_file index_lock;
-			int fd;
+			struct rev_info revs;
+			struct argv_array args = ARGV_ARRAY_INIT;
+			int fd, result;
 
 			read_cache_preload(NULL);
 			refresh_index(&the_index, REFRESH_QUIET|REFRESH_UNMERGED,
@@ -541,8 +554,13 @@ int cmd_describe(int argc, const char **argv, const char *prefix)
 			if (0 <= fd)
 				update_index_if_able(&the_index, &index_lock);
 
-			if (!cmd_diff_index(ARRAY_SIZE(diff_index_args) - 1,
-					    diff_index_args, prefix))
+			init_revisions(&revs, prefix);
+			argv_array_pushv(&args, diff_index_args);
+			if (setup_revisions(args.argc, args.argv, &revs, NULL) != 1)
+				BUG("malformed internal diff-index command line");
+			result = run_diff_index(&revs, 0);
+
+			if (!diff_result_code(&revs.diffopt, result))
 				suffix = NULL;
 			else
 				suffix = dirty;

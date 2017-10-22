@@ -44,8 +44,7 @@ static void sendline(struct helper_data *helper, struct strbuf *buffer)
 {
 	if (debug)
 		fprintf(stderr, "Debug: Remote helper: -> %s", buffer->buf);
-	if (write_in_full(helper->helper->in, buffer->buf, buffer->len)
-		!= buffer->len)
+	if (write_in_full(helper->helper->in, buffer->buf, buffer->len) < 0)
 		die_errno("Full write to remote helper failed");
 }
 
@@ -74,7 +73,7 @@ static void write_constant(int fd, const char *str)
 {
 	if (debug)
 		fprintf(stderr, "Debug: Remote helper: -> %s", str);
-	if (write_in_full(fd, str, strlen(str)) != strlen(str))
+	if (write_in_full(fd, str, strlen(str)) < 0)
 		die_errno("Full write to remote helper failed");
 }
 
@@ -536,7 +535,7 @@ static int fetch_with_import(struct transport *transport,
 		else
 			private = xstrdup(name);
 		if (private) {
-			if (read_ref(private, posn->old_oid.hash) < 0)
+			if (read_ref(private, &posn->old_oid) < 0)
 				die("Could not read ref %s", private);
 			free(private);
 		}
@@ -604,6 +603,7 @@ static int process_connect_service(struct transport *transport,
 			cmdbuf.buf);
 
 exit:
+	strbuf_release(&cmdbuf);
 	fclose(input);
 	return ret;
 }
@@ -795,7 +795,8 @@ static int push_update_refs_status(struct helper_data *data,
 		private = apply_refspecs(data->refspecs, data->refspec_nr, ref->name);
 		if (!private)
 			continue;
-		update_ref("update by helper", private, ref->new_oid.hash, NULL, 0, 0);
+		update_ref("update by helper", private, &ref->new_oid, NULL,
+			   0, 0);
 		free(private);
 	}
 	strbuf_release(&buf);
@@ -927,7 +928,7 @@ static int push_refs_with_export(struct transport *transport,
 		struct object_id oid;
 
 		private = apply_refspecs(data->refspecs, data->refspec_nr, ref->name);
-		if (private && !get_sha1(private, oid.hash)) {
+		if (private && !get_oid(private, &oid)) {
 			strbuf_addf(&buf, "^%s", private);
 			string_list_append(&revlist_args, strbuf_detach(&buf, NULL));
 			oidcpy(&ref->old_oid, &oid);
@@ -941,10 +942,9 @@ static int push_refs_with_export(struct transport *transport,
 					int flag;
 
 					/* Follow symbolic refs (mainly for HEAD). */
-					name = resolve_ref_unsafe(
-						 ref->peer_ref->name,
-						 RESOLVE_REF_READING,
-						 oid.hash, &flag);
+					name = resolve_ref_unsafe(ref->peer_ref->name,
+								  RESOLVE_REF_READING,
+								  &oid, &flag);
 					if (!name || !(flag & REF_ISSYMREF))
 						name = ref->peer_ref->name;
 
@@ -1066,8 +1066,7 @@ static struct ref *get_refs_list(struct transport *transport, int for_push)
 		if (eon) {
 			if (has_attribute(eon + 1, "unchanged")) {
 				(*tail)->status |= REF_STATUS_UPTODATE;
-				if (read_ref((*tail)->name,
-					     (*tail)->old_oid.hash) < 0)
+				if (read_ref((*tail)->name, &(*tail)->old_oid) < 0)
 					die(_("Could not read ref %s"),
 					    (*tail)->name);
 			}
@@ -1117,6 +1116,13 @@ int transport_helper_init(struct transport *transport, const char *name)
 __attribute__((format (printf, 1, 2)))
 static void transfer_debug(const char *fmt, ...)
 {
+	/*
+	 * NEEDSWORK: This function is sometimes used from multiple threads, and
+	 * we end up using debug_enabled racily. That "should not matter" since
+	 * we always write the same value, but it's still wrong. This function
+	 * is listed in .tsan-suppressions for the time being.
+	 */
+
 	va_list args;
 	char msgbuf[PBUFFERSIZE];
 	static int debug_enabled = -1;

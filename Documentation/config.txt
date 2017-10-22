@@ -351,6 +351,9 @@ advice.*::
 	addEmbeddedRepo::
 		Advice on what to do when you've accidentally added one
 		git repo inside of another.
+	ignoredHook::
+		Advice shown if an hook is ignored because the hook is not
+		set as executable.
 --
 
 core.fileMode::
@@ -412,6 +415,13 @@ core.protectNTFS::
 	cause problems with the NTFS filesystem, e.g. conflict with
 	8.3 "short" names.
 	Defaults to `true` on Windows, and `false` elsewhere.
+
+core.fsmonitor::
+	If set, the value of this variable is used as a command which
+	will identify all files that may have changed since the
+	requested date/time. This information is used to speed up git by
+	avoiding unnecessary processing of files that have not changed.
+	See the "fsmonitor-watchman" section of linkgit:githooks[5].
 
 core.trustctime::
 	If false, the ctime differences between the index and the
@@ -776,6 +786,12 @@ core.commentChar::
 If set to "auto", `git-commit` would select a character that is not
 the beginning character of any line in existing commit messages.
 
+core.filesRefLockTimeout::
+	The length of time, in milliseconds, to retry when trying to
+	lock an individual reference. Value 0 means not to retry at
+	all; -1 means to try indefinitely. Default is 100 (i.e.,
+	retry for 100ms).
+
 core.packedRefsTimeout::
 	The length of time, in milliseconds, to retry when trying to
 	lock the `packed-refs` file. Value 0 means not to retry at
@@ -1077,14 +1093,25 @@ This does not affect linkgit:git-format-patch[1] or the
 'git-diff-{asterisk}' plumbing commands.  Can be overridden on the
 command line with the `--color[=<when>]` option.
 
+diff.colorMoved::
+	If set to either a valid `<mode>` or a true value, moved lines
+	in a diff are colored differently, for details of valid modes
+	see '--color-moved' in linkgit:git-diff[1]. If simply set to
+	true the default color mode will be used. When set to false,
+	moved lines are not colored.
+
 color.diff.<slot>::
 	Use customized color for diff colorization.  `<slot>` specifies
 	which part of the patch to use the specified color, and is one
 	of `context` (context text - `plain` is a historical synonym),
 	`meta` (metainformation), `frag`
 	(hunk header), 'func' (function in hunk header), `old` (removed lines),
-	`new` (added lines), `commit` (commit headers), or `whitespace`
-	(highlighting whitespace errors).
+	`new` (added lines), `commit` (commit headers), `whitespace`
+	(highlighting whitespace errors), `oldMoved` (deleted lines),
+	`newMoved` (added lines), `oldMovedDimmed`, `oldMovedAlternative`,
+	`oldMovedAlternativeDimmed`, `newMovedDimmed`, `newMovedAlternative`
+	and `newMovedAlternativeDimmed` (See the '<mode>'
+	setting of '--color-moved' in linkgit:git-diff[1] for details).
 
 color.decorate.<slot>::
 	Use customized color for 'git log --decorate' output.  `<slot>` is one
@@ -1553,11 +1580,13 @@ gc.<pattern>.reflogExpireUnreachable::
 gc.rerereResolved::
 	Records of conflicted merge you resolved earlier are
 	kept for this many days when 'git rerere gc' is run.
+	You can also use more human-readable "1.month.ago", etc.
 	The default is 60 days.  See linkgit:git-rerere[1].
 
 gc.rerereUnresolved::
 	Records of conflicted merge you have not resolved are
 	kept for this many days when 'git rerere gc' is run.
+	You can also use more human-readable "1.month.ago", etc.
 	The default is 15 days.  See linkgit:git-rerere[1].
 
 gitcvs.commitMsgAnnotation::
@@ -2065,12 +2094,31 @@ ssh.variant::
 	Depending on the value of the environment variables `GIT_SSH` or
 	`GIT_SSH_COMMAND`, or the config setting `core.sshCommand`, Git
 	auto-detects whether to adjust its command-line parameters for use
-	with plink or tortoiseplink, as opposed to the default (OpenSSH).
+	with ssh (OpenSSH), plink or tortoiseplink, as opposed to the default
+	(simple).
 +
 The config variable `ssh.variant` can be set to override this auto-detection;
-valid values are `ssh`, `plink`, `putty` or `tortoiseplink`. Any other value
-will be treated as normal ssh. This setting can be overridden via the
-environment variable `GIT_SSH_VARIANT`.
+valid values are `ssh`, `simple`, `plink`, `putty` or `tortoiseplink`. Any
+other value will be treated as normal ssh. This setting can be overridden via
+the environment variable `GIT_SSH_VARIANT`.
++
+The current command-line parameters used for each variant are as
+follows:
++
+--
+
+* `ssh` - [-p port] [-4] [-6] [-o option] [username@]host command
+
+* `simple` - [username@]host command
+
+* `plink` or `putty` - [-P port] [-4] [-6] [username@]host command
+
+* `tortoiseplink` - [-P port] [-4] [-6] -batch [username@]host command
+
+--
++
+Except for the `simple` variant, command-line parameters are likely to
+change as git gains new features.
 
 i18n.commitEncoding::
 	Character encoding the commit messages are stored in; Git itself
@@ -2496,6 +2544,23 @@ The protocol names currently used by git are:
 
   - any external helpers are named by their protocol (e.g., use
     `hg` to allow the `git-remote-hg` helper)
+--
+
+protocol.version::
+	Experimental. If set, clients will attempt to communicate with a
+	server using the specified protocol version.  If unset, no
+	attempt will be made by the client to communicate using a
+	particular protocol version, this results in protocol version 0
+	being used.
+	Supported versions:
++
+--
+
+* `0` - the original wire protocol.
+
+* `1` - the original wire protocol with the addition of a version string
+  in the initial response from the server.
+
 --
 
 pull.ff::
@@ -3066,10 +3131,14 @@ submodule.<name>.url::
 	See linkgit:git-submodule[1] and linkgit:gitmodules[5] for details.
 
 submodule.<name>.update::
-	The default update procedure for a submodule. This variable
-	is populated by `git submodule init` from the
-	linkgit:gitmodules[5] file. See description of 'update'
-	command in linkgit:git-submodule[1].
+	The method by which a submodule is updated by 'git submodule update',
+	which is the only affected command, others such as
+	'git checkout --recurse-submodules' are unaffected. It exists for
+	historical reasons, when 'git submodule' was the only command to
+	interact with submodules; settings like `submodule.active`
+	and `pull.rebase` are more specific. It is populated by
+	`git submodule init` from the linkgit:gitmodules[5] file.
+	See description of 'update' command in linkgit:git-submodule[1].
 
 submodule.<name>.branch::
 	The remote branch name for a submodule, used by `git submodule

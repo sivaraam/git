@@ -19,6 +19,7 @@
 #include "varint.h"
 #include "split-index.h"
 #include "utf8.h"
+#include "fsmonitor.h"
 
 /* Mask for the name length in ce_flags in the on-disk index */
 
@@ -38,11 +39,12 @@
 #define CACHE_EXT_RESOLVE_UNDO 0x52455543 /* "REUC" */
 #define CACHE_EXT_LINK 0x6c696e6b	  /* "link" */
 #define CACHE_EXT_UNTRACKED 0x554E5452	  /* "UNTR" */
+#define CACHE_EXT_FSMONITOR 0x46534D4E	  /* "FSMN" */
 
 /* changes that can be kept in $GIT_DIR/index (basically all extensions) */
 #define EXTMASK (RESOLVE_UNDO_CHANGED | CACHE_TREE_CHANGED | \
 		 CE_ENTRY_ADDED | CE_ENTRY_REMOVED | CE_ENTRY_CHANGED | \
-		 SPLIT_INDEX_ORDERED | UNTRACKED_CHANGED)
+		 SPLIT_INDEX_ORDERED | UNTRACKED_CHANGED | FSMONITOR_CHANGED)
 
 struct index_state the_index;
 static const char *alternate_index_output;
@@ -62,6 +64,7 @@ static void replace_index_entry(struct index_state *istate, int nr, struct cache
 	free(old);
 	set_index_entry(istate, nr, ce);
 	ce->ce_flags |= CE_UPDATE_IN_BASE;
+	mark_fsmonitor_invalid(istate, ce);
 	istate->cache_changed |= CE_ENTRY_CHANGED;
 }
 
@@ -150,8 +153,10 @@ void fill_stat_cache_info(struct cache_entry *ce, struct stat *st)
 	if (assume_unchanged)
 		ce->ce_flags |= CE_VALID;
 
-	if (S_ISREG(st->st_mode))
+	if (S_ISREG(st->st_mode)) {
 		ce_mark_uptodate(ce);
+		mark_fsmonitor_valid(ce);
+	}
 }
 
 static int ce_compare_data(const struct cache_entry *ce, struct stat *st)
@@ -160,9 +165,9 @@ static int ce_compare_data(const struct cache_entry *ce, struct stat *st)
 	int fd = git_open_cloexec(ce->name, O_RDONLY);
 
 	if (fd >= 0) {
-		unsigned char sha1[20];
-		if (!index_fd(sha1, fd, st, OBJ_BLOB, ce->name, 0))
-			match = hashcmp(sha1, ce->oid.hash);
+		struct object_id oid;
+		if (!index_fd(&oid, fd, st, OBJ_BLOB, ce->name, 0))
+			match = oidcmp(&oid, &ce->oid);
 		/* index_fd() closed the file descriptor already */
 	}
 	return match;
@@ -191,7 +196,7 @@ static int ce_compare_link(const struct cache_entry *ce, size_t expected_size)
 
 static int ce_compare_gitlink(const struct cache_entry *ce)
 {
-	unsigned char sha1[20];
+	struct object_id oid;
 
 	/*
 	 * We don't actually require that the .git directory
@@ -201,9 +206,9 @@ static int ce_compare_gitlink(const struct cache_entry *ce)
 	 *
 	 * If so, we consider it always to match.
 	 */
-	if (resolve_gitlink_ref(ce->name, "HEAD", sha1) < 0)
+	if (resolve_gitlink_ref(ce->name, "HEAD", &oid) < 0)
 		return 0;
-	return hashcmp(sha1, ce->oid.hash);
+	return oidcmp(&oid, &ce->oid);
 }
 
 static int ce_modified_check_fs(const struct cache_entry *ce, struct stat *st)
@@ -220,6 +225,7 @@ static int ce_modified_check_fs(const struct cache_entry *ce, struct stat *st)
 	case S_IFDIR:
 		if (S_ISGITLINK(ce->ce_mode))
 			return ce_compare_gitlink(ce) ? DATA_CHANGED : 0;
+		/* else fallthrough */
 	default:
 		return TYPE_CHANGED;
 	}
@@ -300,7 +306,7 @@ int match_stat_data_racy(const struct index_state *istate,
 	return match_stat_data(sd, st);
 }
 
-int ie_match_stat(const struct index_state *istate,
+int ie_match_stat(struct index_state *istate,
 		  const struct cache_entry *ce, struct stat *st,
 		  unsigned int options)
 {
@@ -308,7 +314,10 @@ int ie_match_stat(const struct index_state *istate,
 	int ignore_valid = options & CE_MATCH_IGNORE_VALID;
 	int ignore_skip_worktree = options & CE_MATCH_IGNORE_SKIP_WORKTREE;
 	int assume_racy_is_modified = options & CE_MATCH_RACY_IS_DIRTY;
+	int ignore_fsmonitor = options & CE_MATCH_IGNORE_FSMONITOR;
 
+	if (!ignore_fsmonitor)
+		refresh_fsmonitor(istate);
 	/*
 	 * If it's marked as always valid in the index, it's
 	 * valid whatever the checked-out copy says.
@@ -318,6 +327,8 @@ int ie_match_stat(const struct index_state *istate,
 	if (!ignore_skip_worktree && ce_skip_worktree(ce))
 		return 0;
 	if (!ignore_valid && (ce->ce_flags & CE_VALID))
+		return 0;
+	if (!ignore_fsmonitor && (ce->ce_flags & CE_FSMONITOR_VALID))
 		return 0;
 
 	/*
@@ -356,7 +367,7 @@ int ie_match_stat(const struct index_state *istate,
 	return changed;
 }
 
-int ie_modified(const struct index_state *istate,
+int ie_modified(struct index_state *istate,
 		const struct cache_entry *ce,
 		struct stat *st, unsigned int options)
 {
@@ -689,7 +700,7 @@ int add_to_index(struct index_state *istate, const char *path, struct stat *st, 
 		return 0;
 	}
 	if (!intent_only) {
-		if (index_path(ce->oid.hash, path, st, HASH_WRITE_OBJECT)) {
+		if (index_path(&ce->oid, path, st, HASH_WRITE_OBJECT)) {
 			free(ce);
 			return error("unable to index file %s", path);
 		}
@@ -777,6 +788,7 @@ int chmod_index_entry(struct index_state *istate, struct cache_entry *ce,
 	}
 	cache_tree_invalidate_path(istate, ce->name);
 	ce->ce_flags |= CE_UPDATE_IN_BASE;
+	mark_fsmonitor_invalid(istate, ce);
 	istate->cache_changed |= CE_ENTRY_CHANGED;
 
 	return 0;
@@ -1228,10 +1240,13 @@ static struct cache_entry *refresh_cache_ent(struct index_state *istate,
 	int ignore_valid = options & CE_MATCH_IGNORE_VALID;
 	int ignore_skip_worktree = options & CE_MATCH_IGNORE_SKIP_WORKTREE;
 	int ignore_missing = options & CE_MATCH_IGNORE_MISSING;
+	int ignore_fsmonitor = options & CE_MATCH_IGNORE_FSMONITOR;
 
 	if (!refresh || ce_uptodate(ce))
 		return ce;
 
+	if (!ignore_fsmonitor)
+		refresh_fsmonitor(istate);
 	/*
 	 * CE_VALID or CE_SKIP_WORKTREE means the user promised us
 	 * that the change to the work tree does not matter and told
@@ -1242,6 +1257,10 @@ static struct cache_entry *refresh_cache_ent(struct index_state *istate,
 		return ce;
 	}
 	if (!ignore_valid && (ce->ce_flags & CE_VALID)) {
+		ce_mark_uptodate(ce);
+		return ce;
+	}
+	if (!ignore_fsmonitor && (ce->ce_flags & CE_FSMONITOR_VALID)) {
 		ce_mark_uptodate(ce);
 		return ce;
 	}
@@ -1282,8 +1301,10 @@ static struct cache_entry *refresh_cache_ent(struct index_state *istate,
 			 * because CE_UPTODATE flag is in-core only;
 			 * we are not going to write this change out.
 			 */
-			if (!S_ISGITLINK(ce->ce_mode))
+			if (!S_ISGITLINK(ce->ce_mode)) {
 				ce_mark_uptodate(ce);
+				mark_fsmonitor_valid(ce);
+			}
 			return ce;
 		}
 	}
@@ -1391,6 +1412,7 @@ int refresh_index(struct index_state *istate, unsigned int flags,
 				 */
 				ce->ce_flags &= ~CE_VALID;
 				ce->ce_flags |= CE_UPDATE_IN_BASE;
+				mark_fsmonitor_invalid(istate, ce);
 				istate->cache_changed |= CE_ENTRY_CHANGED;
 			}
 			if (quiet)
@@ -1499,6 +1521,7 @@ struct ondisk_cache_entry_extended {
 };
 
 /* These are only used for v3 or lower */
+#define align_padding_size(size, len) ((size + (len) + 8) & ~7) - (size + len)
 #define align_flex_name(STRUCT,len) ((offsetof(struct STRUCT,name) + (len) + 8) & ~7)
 #define ondisk_cache_entry_size(len) align_flex_name(ondisk_cache_entry,len)
 #define ondisk_cache_entry_extended_size(len) align_flex_name(ondisk_cache_entry_extended,len)
@@ -1548,6 +1571,9 @@ static int read_index_extension(struct index_state *istate,
 		break;
 	case CACHE_EXT_UNTRACKED:
 		istate->untracked = read_untracked_extension(data, sz);
+		break;
+	case CACHE_EXT_FSMONITOR:
+		read_fsmonitor_extension(istate, data, sz);
 		break;
 	default:
 		if (*ext < 'A' || 'Z' < *ext)
@@ -1721,6 +1747,7 @@ static void post_read_index_from(struct index_state *istate)
 	check_ce_order(istate);
 	tweak_untracked_cache(istate);
 	tweak_split_index(istate);
+	tweak_fsmonitor(istate);
 }
 
 /* remember to discard_cache() before reading a different cache! */
@@ -1921,7 +1948,7 @@ static int ce_write_flush(git_SHA_CTX *context, int fd)
 	unsigned int buffered = write_buffer_len;
 	if (buffered) {
 		git_SHA1_Update(context, write_buffer, buffered);
-		if (write_in_full(fd, write_buffer, buffered) != buffered)
+		if (write_in_full(fd, write_buffer, buffered) < 0)
 			return -1;
 		write_buffer_len = 0;
 	}
@@ -1970,7 +1997,7 @@ static int ce_flush(git_SHA_CTX *context, int fd, unsigned char *sha1)
 
 	/* Flush first if not enough space for SHA1 signature */
 	if (left + 20 > WRITE_BUFFER_SIZE) {
-		if (write_in_full(fd, write_buffer, left) != left)
+		if (write_in_full(fd, write_buffer, left) < 0)
 			return -1;
 		left = 0;
 	}
@@ -1979,7 +2006,7 @@ static int ce_flush(git_SHA_CTX *context, int fd, unsigned char *sha1)
 	git_SHA1_Final(write_buffer + left, context);
 	hashcpy(sha1, write_buffer + left);
 	left += 20;
-	return (write_in_full(fd, write_buffer, left) != left) ? -1 : 0;
+	return (write_in_full(fd, write_buffer, left) < 0) ? -1 : 0;
 }
 
 static void ce_smudge_racily_clean_entry(struct cache_entry *ce)
@@ -2032,7 +2059,7 @@ static void ce_smudge_racily_clean_entry(struct cache_entry *ce)
 }
 
 /* Copy miscellaneous fields but not the name */
-static char *copy_cache_entry_to_ondisk(struct ondisk_cache_entry *ondisk,
+static void copy_cache_entry_to_ondisk(struct ondisk_cache_entry *ondisk,
 				       struct cache_entry *ce)
 {
 	short flags;
@@ -2056,32 +2083,35 @@ static char *copy_cache_entry_to_ondisk(struct ondisk_cache_entry *ondisk,
 		struct ondisk_cache_entry_extended *ondisk2;
 		ondisk2 = (struct ondisk_cache_entry_extended *)ondisk;
 		ondisk2->flags2 = htons((ce->ce_flags & CE_EXTENDED_FLAGS) >> 16);
-		return ondisk2->name;
-	}
-	else {
-		return ondisk->name;
 	}
 }
 
 static int ce_write_entry(git_SHA_CTX *c, int fd, struct cache_entry *ce,
-			  struct strbuf *previous_name)
+			  struct strbuf *previous_name, struct ondisk_cache_entry *ondisk)
 {
 	int size;
-	struct ondisk_cache_entry *ondisk;
 	int saved_namelen = saved_namelen; /* compiler workaround */
-	char *name;
 	int result;
+	static unsigned char padding[8] = { 0x00 };
 
 	if (ce->ce_flags & CE_STRIP_NAME) {
 		saved_namelen = ce_namelen(ce);
 		ce->ce_namelen = 0;
 	}
 
+	if (ce->ce_flags & CE_EXTENDED)
+		size = offsetof(struct ondisk_cache_entry_extended, name);
+	else
+		size = offsetof(struct ondisk_cache_entry, name);
+
 	if (!previous_name) {
-		size = ondisk_ce_size(ce);
-		ondisk = xcalloc(1, size);
-		name = copy_cache_entry_to_ondisk(ondisk, ce);
-		memcpy(name, ce->name, ce_namelen(ce));
+		int len = ce_namelen(ce);
+		copy_cache_entry_to_ondisk(ondisk, ce);
+		result = ce_write(c, fd, ondisk, size);
+		if (!result)
+			result = ce_write(c, fd, ce->name, len);
+		if (!result)
+			result = ce_write(c, fd, padding, align_padding_size(size, len));
 	} else {
 		int common, to_remove, prefix_size;
 		unsigned char to_remove_vi[16];
@@ -2094,16 +2124,14 @@ static int ce_write_entry(git_SHA_CTX *c, int fd, struct cache_entry *ce,
 		to_remove = previous_name->len - common;
 		prefix_size = encode_varint(to_remove, to_remove_vi);
 
-		if (ce->ce_flags & CE_EXTENDED)
-			size = offsetof(struct ondisk_cache_entry_extended, name);
-		else
-			size = offsetof(struct ondisk_cache_entry, name);
-		size += prefix_size + (ce_namelen(ce) - common + 1);
-
-		ondisk = xcalloc(1, size);
-		name = copy_cache_entry_to_ondisk(ondisk, ce);
-		memcpy(name, to_remove_vi, prefix_size);
-		memcpy(name + prefix_size, ce->name + common, ce_namelen(ce) - common);
+		copy_cache_entry_to_ondisk(ondisk, ce);
+		result = ce_write(c, fd, ondisk, size);
+		if (!result)
+			result = ce_write(c, fd, to_remove_vi, prefix_size);
+		if (!result)
+			result = ce_write(c, fd, ce->name + common, ce_namelen(ce) - common);
+		if (!result)
+			result = ce_write(c, fd, padding, 1);
 
 		strbuf_splice(previous_name, common, to_remove,
 			      ce->name + common, ce_namelen(ce) - common);
@@ -2113,8 +2141,6 @@ static int ce_write_entry(git_SHA_CTX *c, int fd, struct cache_entry *ce,
 		ce->ce_flags &= ~CE_STRIP_NAME;
 	}
 
-	result = ce_write(c, fd, ondisk, size);
-	free(ondisk);
 	return result;
 }
 
@@ -2175,27 +2201,33 @@ static int has_racy_timestamp(struct index_state *istate)
 	return 0;
 }
 
-/*
- * Opportunistically update the index but do not complain if we can't
- */
 void update_index_if_able(struct index_state *istate, struct lock_file *lockfile)
 {
 	if ((istate->cache_changed || has_racy_timestamp(istate)) &&
-	    verify_index(istate) &&
-	    write_locked_index(istate, lockfile, COMMIT_LOCK))
+	    verify_index(istate))
+		write_locked_index(istate, lockfile, COMMIT_LOCK);
+	else
 		rollback_lock_file(lockfile);
 }
 
+/*
+ * On success, `tempfile` is closed. If it is the temporary file
+ * of a `struct lock_file`, we will therefore effectively perform
+ * a 'close_lock_file_gently()`. Since that is an implementation
+ * detail of lockfiles, callers of `do_write_index()` should not
+ * rely on it.
+ */
 static int do_write_index(struct index_state *istate, struct tempfile *tempfile,
 			  int strip_extensions)
 {
 	int newfd = tempfile->fd;
 	git_SHA_CTX c;
 	struct cache_header hdr;
-	int i, err, removed, extended, hdr_version;
+	int i, err = 0, removed, extended, hdr_version;
 	struct cache_entry **cache = istate->cache;
 	int entries = istate->cache_nr;
 	struct stat st;
+	struct ondisk_cache_entry_extended ondisk;
 	struct strbuf previous_name_buf = STRBUF_INIT, *previous_name;
 	int drop_cache_tree = 0;
 
@@ -2232,6 +2264,7 @@ static int do_write_index(struct index_state *istate, struct tempfile *tempfile,
 		return -1;
 
 	previous_name = (hdr_version == 4) ? &previous_name_buf : NULL;
+
 	for (i = 0; i < entries; i++) {
 		struct cache_entry *ce = cache[i];
 		if (ce->ce_flags & CE_REMOVE)
@@ -2247,14 +2280,20 @@ static int do_write_index(struct index_state *istate, struct tempfile *tempfile,
 			if (allow)
 				warning(msg, ce->name);
 			else
-				return error(msg, ce->name);
+				err = error(msg, ce->name);
 
 			drop_cache_tree = 1;
 		}
-		if (ce_write_entry(&c, newfd, ce, previous_name) < 0)
-			return -1;
+		if (ce_write_entry(&c, newfd, ce, previous_name, (struct ondisk_cache_entry *)&ondisk) < 0)
+			err = -1;
+
+		if (err)
+			break;
 	}
 	strbuf_release(&previous_name_buf);
+
+	if (err)
+		return err;
 
 	/* Write extension data here */
 	if (!strip_extensions && istate->split_index) {
@@ -2300,11 +2339,23 @@ static int do_write_index(struct index_state *istate, struct tempfile *tempfile,
 		if (err)
 			return -1;
 	}
+	if (!strip_extensions && istate->fsmonitor_last_update) {
+		struct strbuf sb = STRBUF_INIT;
+
+		write_fsmonitor_extension(&sb, istate);
+		err = write_index_ext_header(&c, newfd, CACHE_EXT_FSMONITOR, sb.len) < 0
+			|| ce_write(&c, newfd, sb.buf, sb.len) < 0;
+		strbuf_release(&sb);
+		if (err)
+			return -1;
+	}
 
 	if (ce_flush(&c, newfd, istate->sha1))
 		return -1;
-	if (close_tempfile(tempfile))
-		return error(_("could not close '%s'"), tempfile->filename.buf);
+	if (close_tempfile_gently(tempfile)) {
+		error(_("could not close '%s'"), tempfile->filename.buf);
+		return -1;
+	}
 	if (stat(tempfile->filename.buf, &st))
 		return -1;
 	istate->timestamp.sec = (unsigned int)st.st_mtime;
@@ -2328,17 +2379,12 @@ static int commit_locked_index(struct lock_file *lk)
 static int do_write_locked_index(struct index_state *istate, struct lock_file *lock,
 				 unsigned flags)
 {
-	int ret = do_write_index(istate, &lock->tempfile, 0);
+	int ret = do_write_index(istate, lock->tempfile, 0);
 	if (ret)
 		return ret;
-	assert((flags & (COMMIT_LOCK | CLOSE_LOCK)) !=
-	       (COMMIT_LOCK | CLOSE_LOCK));
 	if (flags & COMMIT_LOCK)
 		return commit_locked_index(lock);
-	else if (flags & CLOSE_LOCK)
-		return close_lock_file(lock);
-	else
-		return ret;
+	return close_lock_file_gently(lock);
 }
 
 static int write_split_index(struct index_state *istate,
@@ -2411,34 +2457,33 @@ static int clean_shared_index_files(const char *current_hex)
 	return 0;
 }
 
-static struct tempfile temporary_sharedindex;
-
 static int write_shared_index(struct index_state *istate,
 			      struct lock_file *lock, unsigned flags)
 {
+	struct tempfile *temp;
 	struct split_index *si = istate->split_index;
-	int fd, ret;
+	int ret;
 
-	fd = mks_tempfile(&temporary_sharedindex, git_path("sharedindex_XXXXXX"));
-	if (fd < 0) {
+	temp = mks_tempfile(git_path("sharedindex_XXXXXX"));
+	if (!temp) {
 		hashclr(si->base_sha1);
 		return do_write_locked_index(istate, lock, flags);
 	}
 	move_cache_to_base_index(istate);
-	ret = do_write_index(si->base, &temporary_sharedindex, 1);
+	ret = do_write_index(si->base, temp, 1);
 	if (ret) {
-		delete_tempfile(&temporary_sharedindex);
+		delete_tempfile(&temp);
 		return ret;
 	}
-	ret = adjust_shared_perm(get_tempfile_path(&temporary_sharedindex));
+	ret = adjust_shared_perm(get_tempfile_path(temp));
 	if (ret) {
 		int save_errno = errno;
-		error("cannot fix permission bits on %s", get_tempfile_path(&temporary_sharedindex));
-		delete_tempfile(&temporary_sharedindex);
+		error("cannot fix permission bits on %s", get_tempfile_path(temp));
+		delete_tempfile(&temp);
 		errno = save_errno;
 		return ret;
 	}
-	ret = rename_tempfile(&temporary_sharedindex,
+	ret = rename_tempfile(&temp,
 			      git_path("sharedindex.%s", sha1_to_hex(si->base->sha1)));
 	if (!ret) {
 		hashcpy(si->base_sha1, si->base->sha1);
@@ -2488,7 +2533,8 @@ int write_locked_index(struct index_state *istate, struct lock_file *lock,
 	    (istate->cache_changed & ~EXTMASK)) {
 		if (si)
 			hashclr(si->base_sha1);
-		return do_write_locked_index(istate, lock, flags);
+		ret = do_write_locked_index(istate, lock, flags);
+		goto out;
 	}
 
 	if (getenv("GIT_TEST_SPLIT_INDEX")) {
@@ -2504,7 +2550,7 @@ int write_locked_index(struct index_state *istate, struct lock_file *lock,
 	if (new_shared_index) {
 		ret = write_shared_index(istate, lock, flags);
 		if (ret)
-			return ret;
+			goto out;
 	}
 
 	ret = write_split_index(istate, lock, flags);
@@ -2513,6 +2559,9 @@ int write_locked_index(struct index_state *istate, struct lock_file *lock,
 	if (!ret && !new_shared_index)
 		freshen_shared_index(sha1_to_hex(si->base_sha1), 1);
 
+out:
+	if (flags & COMMIT_LOCK)
+		rollback_lock_file(lock);
 	return ret;
 }
 

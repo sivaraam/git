@@ -32,6 +32,7 @@
 #include "gpg-interface.h"
 #include "sequencer.h"
 #include "string-list.h"
+#include "packfile.h"
 
 #define DEFAULT_TWOHEAD (1<<0)
 #define DEFAULT_OCTOPUS (1<<1)
@@ -70,7 +71,9 @@ static int continue_current_merge;
 static int allow_unrelated_histories;
 static int show_progress = -1;
 static int default_to_upstream = 1;
+static int signoff;
 static const char *sign_commit;
+static int verify_msg = 1;
 
 static struct strategy all_strategy[] = {
 	{ "recursive",  DEFAULT_TWOHEAD | NO_TRIVIAL },
@@ -233,6 +236,8 @@ static struct option builtin_merge_options[] = {
 	{ OPTION_STRING, 'S', "gpg-sign", &sign_commit, N_("key-id"),
 	  N_("GPG sign commit"), PARSE_OPT_OPTARG, NULL, (intptr_t) "" },
 	OPT_BOOL(0, "overwrite-ignore", &overwrite_ignore, N_("update ignored files (default)")),
+	OPT_BOOL(0, "signoff", &signoff, N_("add Signed-off-by:")),
+	OPT_BOOL(0, "verify", &verify_msg, N_("verify commit-msg hook")),
 	OPT_END()
 };
 
@@ -250,6 +255,7 @@ static int save_state(struct object_id *stash)
 	struct child_process cp = CHILD_PROCESS_INIT;
 	struct strbuf buffer = STRBUF_INIT;
 	const char *argv[] = {"stash", "create", NULL};
+	int rc = -1;
 
 	cp.argv = argv;
 	cp.out = -1;
@@ -263,11 +269,14 @@ static int save_state(struct object_id *stash)
 	if (finish_command(&cp) || len < 0)
 		die(_("stash failed"));
 	else if (!len)		/* no changes */
-		return -1;
+		goto out;
 	strbuf_setlen(&buffer, buffer.len-1);
 	if (get_oid(buffer.buf, stash))
 		die(_("not a valid object: %s"), buffer.buf);
-	return 0;
+	rc = 0;
+out:
+	strbuf_release(&buffer);
+	return rc;
 }
 
 static void read_empty(unsigned const char *sha1, int verbose)
@@ -396,9 +405,8 @@ static void finish(struct commit *head_commit,
 			printf(_("No merge message -- not updating HEAD\n"));
 		else {
 			const char *argv_gc_auto[] = { "gc", "--auto", NULL };
-			update_ref(reflog_message.buf, "HEAD",
-				new_head->hash, head->hash, 0,
-				UPDATE_REFS_DIE_ON_ERR);
+			update_ref(reflog_message.buf, "HEAD", new_head, head,
+				   0, UPDATE_REFS_DIE_ON_ERR);
 			/*
 			 * We ignore errors in 'gc --auto', since the
 			 * user should see them.
@@ -446,7 +454,7 @@ static void merge_name(const char *remote, struct strbuf *msg)
 	if (!remote_head)
 		die(_("'%s' does not point to a commit"), remote);
 
-	if (dwim_ref(remote, strlen(remote), branch_head.hash, &found_ref) > 0) {
+	if (dwim_ref(remote, strlen(remote), &branch_head, &found_ref) > 0) {
 		if (starts_with(found_ref, "refs/heads/")) {
 			strbuf_addf(msg, "%s\t\tbranch '%s' of .\n",
 				    oid_to_hex(&branch_head), remote);
@@ -566,7 +574,7 @@ static int git_merge_config(const char *k, const char *v, void *cb)
 	else if (!strcmp(k, "merge.renormalize"))
 		option_renormalize = git_config_bool(k, v);
 	else if (!strcmp(k, "merge.ff")) {
-		int boolval = git_config_maybe_bool(k, v);
+		int boolval = git_parse_maybe_bool(v);
 		if (0 <= boolval) {
 			fast_forward = boolval ? FF_ALLOW : FF_NO;
 		} else if (v && !strcmp(v, "only")) {
@@ -766,6 +774,8 @@ static void prepare_to_commit(struct commit_list *remoteheads)
 		BUG("the control must not reach here under --squash");
 	if (0 < option_edit)
 		strbuf_commented_addf(&msg, _(merge_editor_comment), comment_line_char);
+	if (signoff)
+		append_signoff(&msg, ignore_non_trailer(msg.buf, msg.len), 0);
 	write_merge_heads(remoteheads);
 	write_file_buf(git_path_merge_msg(), msg.buf, msg.len);
 	if (run_commit_hook(0 < option_edit, get_index_file(), "prepare-commit-msg",
@@ -775,6 +785,12 @@ static void prepare_to_commit(struct commit_list *remoteheads)
 		if (launch_editor(git_path_merge_msg(), NULL, NULL))
 			abort_commit(remoteheads, NULL);
 	}
+
+	if (verify_msg && run_commit_hook(0 < option_edit, get_index_file(),
+					  "commit-msg",
+					  git_path_merge_msg(), NULL))
+		abort_commit(remoteheads, NULL);
+
 	read_merge_msg(&msg);
 	strbuf_stripspace(&msg, 0 < option_edit);
 	if (!msg.len)
@@ -929,6 +945,7 @@ static void write_merge_heads(struct commit_list *remoteheads)
 	if (fast_forward == FF_NO)
 		strbuf_addstr(&buf, "no-ff");
 	write_file_buf(git_path_merge_mode(), buf.buf, buf.len);
+	strbuf_release(&buf);
 }
 
 static void write_merge_state(struct commit_list *remoteheads)
@@ -949,7 +966,7 @@ static int default_edit_option(void)
 		return 0;
 
 	if (e) {
-		int v = git_config_maybe_bool(name, e);
+		int v = git_parse_maybe_bool(e);
 		if (v < 0)
 			die(_("Bad value '%s' in environment '%s'"), e, name);
 		return v;
@@ -1125,7 +1142,7 @@ int cmd_merge(int argc, const char **argv, const char *prefix)
 	 * Check if we are _not_ on a detached HEAD, i.e. if there is a
 	 * current branch.
 	 */
-	branch = branch_to_free = resolve_refdup("HEAD", 0, head_oid.hash, NULL);
+	branch = branch_to_free = resolve_refdup("HEAD", 0, &head_oid, NULL);
 	if (branch)
 		skip_prefix(branch, "refs/heads/", &branch);
 	if (!branch || is_null_oid(&head_oid))
@@ -1243,8 +1260,8 @@ int cmd_merge(int argc, const char **argv, const char *prefix)
 			die(_("Can merge only exactly one commit into empty head"));
 		remote_head_oid = &remoteheads->item->object.oid;
 		read_empty(remote_head_oid->hash, 0);
-		update_ref("initial pull", "HEAD", remote_head_oid->hash,
-			   NULL, 0, UPDATE_REFS_DIE_ON_ERR);
+		update_ref("initial pull", "HEAD", remote_head_oid, NULL, 0,
+			   UPDATE_REFS_DIE_ON_ERR);
 		goto done;
 	}
 
@@ -1339,8 +1356,8 @@ int cmd_merge(int argc, const char **argv, const char *prefix)
 		free(list);
 	}
 
-	update_ref("updating ORIG_HEAD", "ORIG_HEAD", head_commit->object.oid.hash,
-		   NULL, 0, UPDATE_REFS_DIE_ON_ERR);
+	update_ref("updating ORIG_HEAD", "ORIG_HEAD",
+		   &head_commit->object.oid, NULL, 0, UPDATE_REFS_DIE_ON_ERR);
 
 	if (remoteheads && !common) {
 		/* No common ancestors found. */
@@ -1354,7 +1371,7 @@ int cmd_merge(int argc, const char **argv, const char *prefix)
 		 * If head can reach all the merge then we are up to date.
 		 * but first the most common case of merging one remote.
 		 */
-		finish_up_to_date(_("Already up-to-date."));
+		finish_up_to_date(_("Already up to date."));
 		goto done;
 	} else if (fast_forward != FF_NO && !remoteheads->next &&
 			!common->next &&
@@ -1437,7 +1454,7 @@ int cmd_merge(int argc, const char **argv, const char *prefix)
 			}
 		}
 		if (up_to_date) {
-			finish_up_to_date(_("Already up-to-date. Yeeah!"));
+			finish_up_to_date(_("Already up to date. Yeeah!"));
 			goto done;
 		}
 	}

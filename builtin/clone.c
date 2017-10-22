@@ -25,6 +25,7 @@
 #include "remote.h"
 #include "run-command.h"
 #include "connected.h"
+#include "packfile.h"
 
 /*
  * Overall FIXMEs:
@@ -506,8 +507,8 @@ static void remove_junk(void)
 	if (junk_work_tree) {
 		strbuf_addstr(&sb, junk_work_tree);
 		remove_dir_recursively(&sb, 0);
-		strbuf_reset(&sb);
 	}
+	strbuf_release(&sb);
 }
 
 static void remove_junk_on_signal(int signo)
@@ -587,7 +588,7 @@ static void write_remote_refs(const struct ref *local_refs)
 	for (r = local_refs; r; r = r->next) {
 		if (!r->peer_ref)
 			continue;
-		if (ref_transaction_create(t, r->peer_ref->name, r->old_oid.hash,
+		if (ref_transaction_create(t, r->peer_ref->name, &r->old_oid,
 					   0, NULL, &err))
 			die("%s", err.buf);
 	}
@@ -609,12 +610,12 @@ static void write_followtags(const struct ref *refs, const char *msg)
 			continue;
 		if (!has_object_file(&ref->old_oid))
 			continue;
-		update_ref(msg, ref->name, ref->old_oid.hash,
-			   NULL, 0, UPDATE_REFS_DIE_ON_ERR);
+		update_ref(msg, ref->name, &ref->old_oid, NULL, 0,
+			   UPDATE_REFS_DIE_ON_ERR);
 	}
 }
 
-static int iterate_ref_map(void *cb_data, unsigned char sha1[20])
+static int iterate_ref_map(void *cb_data, struct object_id *oid)
 {
 	struct ref **rm = cb_data;
 	struct ref *ref = *rm;
@@ -629,7 +630,7 @@ static int iterate_ref_map(void *cb_data, unsigned char sha1[20])
 	if (!ref)
 		return -1;
 
-	hashcpy(sha1, ref->old_oid.hash);
+	oidcpy(oid, &ref->old_oid);
 	*rm = ref->next;
 	return 0;
 }
@@ -681,23 +682,23 @@ static void update_head(const struct ref *our, const struct ref *remote,
 		if (create_symref("HEAD", our->name, NULL) < 0)
 			die(_("unable to update HEAD"));
 		if (!option_bare) {
-			update_ref(msg, "HEAD", our->old_oid.hash, NULL, 0,
+			update_ref(msg, "HEAD", &our->old_oid, NULL, 0,
 				   UPDATE_REFS_DIE_ON_ERR);
 			install_branch_config(0, head, option_origin, our->name);
 		}
 	} else if (our) {
 		struct commit *c = lookup_commit_reference(&our->old_oid);
 		/* --branch specifies a non-branch (i.e. tags), detach HEAD */
-		update_ref(msg, "HEAD", c->object.oid.hash,
-			   NULL, REF_NODEREF, UPDATE_REFS_DIE_ON_ERR);
+		update_ref(msg, "HEAD", &c->object.oid, NULL, REF_NODEREF,
+			   UPDATE_REFS_DIE_ON_ERR);
 	} else if (remote) {
 		/*
 		 * We know remote HEAD points to a non-branch, or
 		 * HEAD points to a branch but we don't know which one.
 		 * Detach HEAD in all these cases.
 		 */
-		update_ref(msg, "HEAD", remote->old_oid.hash,
-			   NULL, REF_NODEREF, UPDATE_REFS_DIE_ON_ERR);
+		update_ref(msg, "HEAD", &remote->old_oid, NULL, REF_NODEREF,
+			   UPDATE_REFS_DIE_ON_ERR);
 	}
 }
 
@@ -705,7 +706,7 @@ static int checkout(int submodule_progress)
 {
 	struct object_id oid;
 	char *head;
-	struct lock_file *lock_file;
+	struct lock_file lock_file = LOCK_INIT;
 	struct unpack_trees_options opts;
 	struct tree *tree;
 	struct tree_desc t;
@@ -714,7 +715,7 @@ static int checkout(int submodule_progress)
 	if (option_no_checkout)
 		return 0;
 
-	head = resolve_refdup("HEAD", RESOLVE_REF_READING, oid.hash, NULL);
+	head = resolve_refdup("HEAD", RESOLVE_REF_READING, &oid, NULL);
 	if (!head) {
 		warning(_("remote HEAD refers to nonexistent ref, "
 			  "unable to checkout.\n"));
@@ -732,8 +733,7 @@ static int checkout(int submodule_progress)
 	/* We need to be in the new work tree for the checkout */
 	setup_work_tree();
 
-	lock_file = xcalloc(1, sizeof(struct lock_file));
-	hold_locked_index(lock_file, LOCK_DIE_ON_ERROR);
+	hold_locked_index(&lock_file, LOCK_DIE_ON_ERROR);
 
 	memset(&opts, 0, sizeof opts);
 	opts.update = 1;
@@ -749,7 +749,7 @@ static int checkout(int submodule_progress)
 	if (unpack_trees(1, &t, &opts) < 0)
 		die(_("unable to checkout working tree"));
 
-	if (write_locked_index(&the_index, lock_file, COMMIT_LOCK))
+	if (write_locked_index(&the_index, &lock_file, COMMIT_LOCK))
 		die(_("unable to write new index file"));
 
 	err |= run_hook_le(NULL, "post-checkout", sha1_to_hex(null_sha1),
