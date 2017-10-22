@@ -1,9 +1,8 @@
 #! /bin/bash
 # Script to test if build passes succesfully
 
-# Source the build script and run it
-# before testing
-. BUILD-CUSTOM
+# Source the common build script to get to the
+# right directory and get access to common variables
+. BUILD-CUSTOM-COMMON
 
-cd t
-make DEFAULT_TEST_TARGET=prove GIT_PROVE_OPTS='--timer --jobs 16' test |  grep -v '^ok'
+make $BUILD_OPTS DEFAULT_TEST_TARGET=prove GIT_PROVE_OPTS='--timer --jobs 16' test |  grep -v '^ok'
