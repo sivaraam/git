@@ -5,4 +5,8 @@
 # right directory and get access to common variables
 . BUILD-CUSTOM-COMMON
 
-make $BUILD_OPTS DEFAULT_TEST_TARGET=prove GIT_PROVE_OPTS='--timer --jobs 16' test
+temp_dir=/tmp/git-test
+mkdir -p ${temp_dir}
+sudo mount -t tmpfs -o size=50% tmpfs ${temp_dir}
+make $BUILD_OPTS GIT_TEST_OPTS="--root=${temp_dir}" DEFAULT_TEST_TARGET=prove GIT_PROVE_OPTS='--timer --jobs 16' test
+sudo umount ${temp_dir}
