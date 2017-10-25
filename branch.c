@@ -178,41 +178,51 @@ int read_branch_desc(struct strbuf *buf, const char *branch_name)
 	return 0;
 }
 
-/*
- * Check if 'name' can be a valid name for a branch; die otherwise.
- * Return 1 if the named branch already exists; return 0 otherwise.
- * Fill ref with the full refname for the branch.
- */
-int validate_branchname(const char *name, struct strbuf *ref)
+enum branch_validation_result validate_branchname(const char *name, struct strbuf *ref, unsigned dont_fail)
 {
-	if (strbuf_check_branch_ref(ref, name))
-		die(_("'%s' is not a valid branch name."), name);
+	if (strbuf_check_branch_ref(ref, name)) {
+		if (dont_fail)
+			return INVALID_BRANCH_NAME;
+		else
+			die(_("'%s' is not a valid branch name."), name);
+	}
 
-	return ref_exists(ref->buf);
+	if(ref_exists(ref->buf))
+		return BRANCH_EXISTS;
+	else
+		return BRANCH_DOESNT_EXIST;
 }
 
-/*
- * Check if a branch 'name' can be created as a new branch; die otherwise.
- * 'force' can be used when it is OK for the named branch already exists.
- * Return 1 if the named branch already exists; return 0 otherwise.
- * Fill ref with the full refname for the branch.
- */
-int validate_new_branchname(const char *name, struct strbuf *ref, int force)
+enum branch_validation_result validate_new_branchname(const char *name, struct strbuf *ref, int force, unsigned dont_fail)
 {
 	const char *head;
 
-	if (!validate_branchname(name, ref))
-		return 0;
+	if(dont_fail) {
+		enum branch_validation_result res = validate_branchname(name, ref, 1);
+		if (res == INVALID_BRANCH_NAME || res == BRANCH_DOESNT_EXIST)
+				return res;
+	} else {
+		if(validate_branchname(name, ref, 0) == BRANCH_DOESNT_EXIST)
+			return BRANCH_DOESNT_EXIST;
+	}
 
-	if (!force)
-		die(_("A branch named '%s' already exists."),
-		    ref->buf + strlen("refs/heads/"));
+	if (!force) {
+		if (dont_fail)
+			return BRANCH_EXISTS_NO_FORCE;
+		else
+			die(_("A branch named '%s' already exists."),
+				ref->buf + strlen("refs/heads/"));
+	}
 
 	head = resolve_ref_unsafe("HEAD", 0, NULL, NULL);
-	if (!is_bare_repository() && head && !strcmp(head, ref->buf))
-		die(_("Cannot force update the current branch."));
+	if (!is_bare_repository() && head && !strcmp(head, ref->buf)) {
+		if (dont_fail)
+			return CANNOT_FORCE_UPDATE_CURRENT_BRANCH;
+		else
+			die(_("Cannot force update the current branch."));
+	}
 
-	return 1;
+	return BRANCH_EXISTS;
 }
 
 static int check_tracking_branch(struct remote *remote, void *cb_data)
@@ -259,8 +269,8 @@ void create_branch(const char *name, const char *start_name,
 		explicit_tracking = 1;
 
 	if ((track == BRANCH_TRACK_OVERRIDE || clobber_head_ok)
-	    ? validate_branchname(name, &ref)
-	    : validate_new_branchname(name, &ref, force)) {
+	    ? validate_branchname(name, &ref, 0)
+	    : validate_new_branchname(name, &ref, force, 0)) {
 		if (!force)
 			dont_change_ref = 1;
 		else
