@@ -55,6 +55,13 @@ enum color_branch {
 	BRANCH_COLOR_UPSTREAM = 5
 };
 
+enum old_branch_validation_result {
+	OLD_BRANCH_DOESNT_EXIST = -2,
+	INVALID_OLD_BRANCH_NAME = -1,
+	OLD_BRANCH_EXISTS = 0,
+	RENAMING_BAD_BRANCH_NAME = 1
+};
+
 static struct string_list output = STRING_LIST_INIT_DUP;
 static unsigned int colopts;
 
@@ -458,13 +465,76 @@ static void reject_rebase_or_bisect_branch(const char *target)
 	free_worktrees(worktrees);
 }
 
+static void get_error_msg(struct strbuf* error_msg, const char* oldname, enum old_branch_validation_result old_branch_name_res,
+			  const char* newname, enum branch_validation_result new_branch_name_res)
+{
+	const char* connector_string = "; ";
+	unsigned old_branch_name_has_error = 0;
+
+	switch (old_branch_name_res) {
+		case INVALID_BRANCH_NAME:
+			strbuf_addf(error_msg, _("old branch name '%s' is invalid"), oldname);
+			old_branch_name_has_error = 1;
+			break;
+		case OLD_BRANCH_DOESNT_EXIST:
+			strbuf_addf(error_msg, _("branch '%s' doesn't exist"), oldname);
+			old_branch_name_has_error = 1;
+			break;
+
+		/* not necessary to handle success cases */
+		case OLD_BRANCH_EXISTS:
+		case RENAMING_BAD_BRANCH_NAME:
+			break;
+	}
+
+	switch (new_branch_name_res) {
+		case BRANCH_EXISTS_NO_FORCE:
+			strbuf_addf(error_msg, "%s", (old_branch_name_has_error) ? connector_string : "");
+			strbuf_addf(error_msg,_("branch '%s' already exists"), newname);
+			break;
+		case CANNOT_FORCE_UPDATE_CURRENT_BRANCH:
+			strbuf_addf(error_msg, "%s", (old_branch_name_has_error) ? connector_string : "");
+			strbuf_addstr(error_msg, _("cannot force update the current branch"));
+			break;
+		case INVALID_BRANCH_NAME:
+			strbuf_addf(error_msg, "%s", (old_branch_name_has_error) ? connector_string : "");
+			strbuf_addf(error_msg, _("new branch name '%s' is invalid"), newname);
+			break;
+
+		/* not necessary to handle success cases */
+		case BRANCH_EXISTS:
+		case BRANCH_DOESNT_EXIST:
+			break;
+	}
+}
+
+/* Validate the old branch name and return the result */
+static enum old_branch_validation_result validate_old_branchname (const char* name, struct strbuf *oldref) {
+	int bad_ref = strbuf_check_branch_ref(oldref, name);
+	int branch_exists = ref_exists(oldref->buf);
+
+	if (bad_ref) {
+		if(branch_exists)
+			return RENAMING_BAD_BRANCH_NAME;
+		else
+			return INVALID_OLD_BRANCH_NAME;
+	}
+
+	if (branch_exists)
+		return OLD_BRANCH_EXISTS;
+	else
+		return OLD_BRANCH_DOESNT_EXIST;
+}
+
 static void copy_or_rename_branch(const char *oldname, const char *newname, int copy, int force)
 {
 	struct strbuf oldref = STRBUF_INIT, newref = STRBUF_INIT, logmsg = STRBUF_INIT;
 	struct strbuf oldsection = STRBUF_INIT, newsection = STRBUF_INIT;
 	const char *prefix_free_oldref = NULL;
 	const char *prefix_free_newref = NULL;
-	int recovery = 0;
+	struct strbuf error_msg = STRBUF_INIT, empty = STRBUF_INIT;
+	enum branch_validation_result new_branch_name_res;
+	enum old_branch_validation_result old_branch_name_res;
 
 	if (!oldname) {
 		if (copy)
@@ -473,25 +543,19 @@ static void copy_or_rename_branch(const char *oldname, const char *newname, int 
 			die(_("cannot rename the current branch while not on any."));
 	}
 
-	if (strbuf_check_branch_ref(&oldref, oldname)) {
-		/*
-		 * Bad name --- this could be an attempt to rename a
-		 * ref that we used to allow to be created by accident.
-		 */
-		if (ref_exists(oldref.buf))
-			recovery = 1;
-		else
-			die(_("Invalid branch name: '%s'"), oldname);
-	}
-
+	old_branch_name_res = validate_old_branchname(oldname, &oldref);
 	/*
 	 * A command like "git branch -M currentbranch currentbranch" cannot
 	 * cause the worktree to become inconsistent with HEAD, so allow it.
 	 */
 	if (!strcmp(oldname, newname))
-		validate_branchname(newname, &newref, 0);
+		new_branch_name_res = validate_branchname(newname, &newref, 1);
 	else
-		validate_new_branchname(newname, &newref, force, 0);
+		new_branch_name_res = validate_new_branchname(newname, &newref, force, 1);
+
+	get_error_msg(&error_msg, oldname, old_branch_name_res, newname, new_branch_name_res);
+	if (strbuf_cmp(&error_msg, &empty))
+		die("%s", error_msg.buf);
 
 	reject_rebase_or_bisect_branch(oldref.buf);
 
@@ -511,7 +575,7 @@ static void copy_or_rename_branch(const char *oldname, const char *newname, int 
 	if (copy && copy_existing_ref(oldref.buf, newref.buf, logmsg.buf))
 		die(_("Branch copy failed"));
 
-	if (recovery) {
+	if (old_branch_name_res == RENAMING_BAD_BRANCH_NAME) {
 		if (copy)
 			warning(_("Created a copy of a misnamed branch '%s'"),
 				prefix_free_oldref);
@@ -536,6 +600,8 @@ static void copy_or_rename_branch(const char *oldname, const char *newname, int 
 		die(_("Branch is copied, but update of config-file failed"));
 	strbuf_release(&oldsection);
 	strbuf_release(&newsection);
+	strbuf_release(&error_msg);
+	strbuf_release(&empty);
 }
 
 static GIT_PATH_FUNC(edit_description, "EDIT_DESCRIPTION")
