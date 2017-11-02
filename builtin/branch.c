@@ -55,6 +55,13 @@ enum color_branch {
 	BRANCH_COLOR_UPSTREAM = 5
 };
 
+enum old_branch_validation_result {
+	VALIDATION_1_FATAL_OLD_BRANCH_DOESNT_EXIST = -2,
+	VALIDATION_1_FATAL_INVALID_OLD_BRANCH_NAME = -1,
+	VALIDATION_1_PASS_OLD_BRANCH_EXISTS = 0,
+	VALIDATION_1_WARN_BAD_OLD_BRANCH_NAME = 1
+};
+
 static struct string_list output = STRING_LIST_INIT_DUP;
 static unsigned int colopts;
 
@@ -458,13 +465,86 @@ static void reject_rebase_or_bisect_branch(const char *target)
 	free_worktrees(worktrees);
 }
 
+static void get_error_msg(struct strbuf* error_msg,
+			  const char* oldname, enum old_branch_validation_result old_branch_name_res,
+			  const char* newname, enum branch_validation_result new_branch_name_res)
+{
+	const char* connector_string = "; ";
+	unsigned append_connector = 0;
+
+	switch (old_branch_name_res) {
+	case VALIDATION_1_FATAL_INVALID_OLD_BRANCH_NAME:
+		strbuf_addf(error_msg,
+			    _("old branch name '%s' is invalid"), oldname);
+		append_connector = 1;
+		break;
+	case VALIDATION_1_FATAL_OLD_BRANCH_DOESNT_EXIST:
+		strbuf_addf(error_msg,
+			    _("branch '%s' doesn't exist"), oldname);
+		append_connector = 1;
+		break;
+
+	/* not necessary to handle nonfatal cases */
+	case VALIDATION_1_PASS_OLD_BRANCH_EXISTS:
+	case VALIDATION_1_WARN_BAD_OLD_BRANCH_NAME:
+		break;
+	}
+
+	switch (new_branch_name_res) {
+	case VALIDATION_FATAL_BRANCH_EXISTS_NO_FORCE:
+		strbuf_addf(error_msg, "%s",
+			    (append_connector) ? connector_string : "");
+		strbuf_addf(error_msg,
+			    _("branch '%s' already exists"), newname);
+		break;
+	case VALIDATION_FATAL_CANNOT_FORCE_UPDATE_CURRENT_BRANCH:
+		strbuf_addf(error_msg, "%s",
+			    (append_connector) ? connector_string : "");
+		strbuf_addstr(error_msg,
+				_("cannot force update the current branch"));
+		break;
+	case VALIDATION_FATAL_INVALID_BRANCH_NAME:
+		strbuf_addf(error_msg, "%s",
+			    (append_connector) ? connector_string : "");
+		strbuf_addf(error_msg,
+			    _("new branch name '%s' is invalid"), newname);
+		break;
+
+	/* not necessary to handle nonfatal cases */
+	case VALIDATION_PASS_BRANCH_DOESNT_EXIST:
+	case VALIDATION_PASS_BRANCH_EXISTS:
+	case VALIDATION_WARN_BRANCH_EXISTS:
+		break;
+	}
+}
+
+/* Validate the old branch name and return the result */
+static enum old_branch_validation_result validate_old_branchname (const char* name, struct strbuf *oldref) {
+	int bad_ref = strbuf_check_branch_ref(oldref, name);
+	int branch_exists = ref_exists(oldref->buf);
+
+	if (bad_ref) {
+		if(branch_exists)
+			return VALIDATION_1_WARN_BAD_OLD_BRANCH_NAME;
+		else
+			return VALIDATION_1_FATAL_INVALID_OLD_BRANCH_NAME;
+	}
+
+	if (branch_exists)
+		return VALIDATION_1_PASS_OLD_BRANCH_EXISTS;
+	else
+		return VALIDATION_1_FATAL_OLD_BRANCH_DOESNT_EXIST;
+}
+
 static void copy_or_rename_branch(const char *oldname, const char *newname, int copy, int force)
 {
 	struct strbuf oldref = STRBUF_INIT, newref = STRBUF_INIT, logmsg = STRBUF_INIT;
 	struct strbuf oldsection = STRBUF_INIT, newsection = STRBUF_INIT;
 	const char *interpreted_oldname = NULL;
 	const char *interpreted_newname = NULL;
-	int recovery = 0;
+	struct strbuf error_msg = STRBUF_INIT, empty = STRBUF_INIT;
+	enum branch_validation_result new_branch_name_res;
+	enum old_branch_validation_result old_branch_name_res;
 
 	if (!oldname) {
 		if (copy)
@@ -473,32 +553,27 @@ static void copy_or_rename_branch(const char *oldname, const char *newname, int 
 			die(_("cannot rename the current branch while not on any."));
 	}
 
-	if (strbuf_check_branch_ref(&oldref, oldname)) {
-		/*
-		 * Bad name --- this could be an attempt to rename a
-		 * ref that we used to allow to be created by accident.
-		 */
-		if (ref_exists(oldref.buf))
-			recovery = 1;
-		else
-			die(_("Invalid branch name: '%s'"), oldname);
-	}
-
+	old_branch_name_res = validate_old_branchname(oldname, &oldref);
 	/*
 	 * A command like "git branch -M currentbranch currentbranch" cannot
 	 * cause the worktree to become inconsistent with HEAD, so allow it.
 	 */
 	if (!strcmp(oldname, newname))
-		validate_branchname(newname, &newref, 0);
+		new_branch_name_res = validate_branchname(newname, &newref, 1);
 	else
-		validate_new_branchname(newname, &newref, force, 0);
-
-	reject_rebase_or_bisect_branch(oldref.buf);
+		new_branch_name_res = validate_new_branchname(newname, &newref, force, 1);
 
 	if (!skip_prefix(oldref.buf, "refs/heads/", &interpreted_oldname) ||
 	    !skip_prefix(newref.buf, "refs/heads/", &interpreted_newname)) {
 		die("BUG: expected prefix missing for refs");
 	}
+
+	get_error_msg(&error_msg, interpreted_oldname, old_branch_name_res,
+				  interpreted_newname, new_branch_name_res);
+	if (strbuf_cmp(&error_msg, &empty))
+		die("%s", error_msg.buf);
+
+	reject_rebase_or_bisect_branch(oldref.buf);
 
 	if (copy)
 		strbuf_addf(&logmsg, "Branch: copied %s to %s",
@@ -512,7 +587,7 @@ static void copy_or_rename_branch(const char *oldname, const char *newname, int 
 	if (copy && copy_existing_ref(oldref.buf, newref.buf, logmsg.buf))
 		die(_("Branch copy failed"));
 
-	if (recovery) {
+	if (old_branch_name_res == VALIDATION_1_WARN_BAD_OLD_BRANCH_NAME) {
 		if (copy)
 			warning(_("Created a copy of a misnamed branch '%s'"),
 				interpreted_oldname);
@@ -537,6 +612,8 @@ static void copy_or_rename_branch(const char *oldname, const char *newname, int 
 		die(_("Branch is copied, but update of config-file failed"));
 	strbuf_release(&oldsection);
 	strbuf_release(&newsection);
+	strbuf_release(&error_msg);
+	strbuf_release(&empty);
 }
 
 static GIT_PATH_FUNC(edit_description, "EDIT_DESCRIPTION")
