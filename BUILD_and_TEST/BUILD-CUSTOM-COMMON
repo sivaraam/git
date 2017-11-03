@@ -1,5 +1,3 @@
-BUILD_OPTS='NO_GETTEXT=1 DEVELOPER=1'
-
 add_to_bashrc() {
   BASHRC_LOCATION="$HOME/.bashrc"
   echo -e  "$1" >> $BASHRC_LOCATION

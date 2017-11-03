@@ -15,11 +15,9 @@ setup_alias() {
   add_to_bashrc "export CUSTOM_TEST_GIT_ALIAS=1"
 }
 
-build() {
-  make $BUILD_OPTS
-}
-
-build
+# Assumes configurations such as NO_GETTEXT=1 etc.
+# have been specified in config.mak
+make
 
 if [ $? == 0 ] && [ -z "$CUSTOM_TEST_GIT_ALIAS" ]
 then

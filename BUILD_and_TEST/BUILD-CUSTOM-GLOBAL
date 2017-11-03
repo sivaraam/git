@@ -3,17 +3,6 @@
 
 . BUILD-CUSTOM-COMMON
 
-create_build_dir() {
-  BUILD_DIR="$1"
-  if (mkdir -p $BUILD_DIR 2>/dev/null)
-  then
-    :
-  else
-    notify "Super user rights required to create build directory: $BUILD_DIR"
-    sudo mkdir -p $BUILD_DIR
-  fi
-}
-
 # Add custom alias for git that gets hidden
 # due to this installation
 setup_alias() {
@@ -38,15 +27,10 @@ warn "Doing a global build."
 warn "This might 'hide' existing git installation under 'hgit'"
 warn "Read the script for more info"
 
-build() {
-  make $1 prefix="$2"
-  make $1 install prefix="$2"
-}
-
-CUSTOM_BUILD_LOCATION="$HOME/.local"
-create_build_dir $CUSTOM_BUILD_LOCATION
-
-build "$BUILD_OPTS" "$CUSTOM_BUILD_LOCATION"
+# Assumes configurations such as prefix etc.
+# have been specified in config.mak
+make
+make install
 
 if [ $? == 0 ] && (type git 1>/dev/null 2>/dev/null) && [ -z "$CUSTOM_GLOBAL_GIT_ALIAS" ]
 then

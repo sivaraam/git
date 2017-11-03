@@ -15,7 +15,7 @@ build () {
   then
    . BUILD-CUSTOM-GLOBAL
   else
-    . BUILD-CUSTOM-TEST
+   . BUILD-CUSTOM-TEST
   fi
 
 }
