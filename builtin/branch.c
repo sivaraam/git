@@ -462,6 +462,8 @@ static void copy_or_rename_branch(const char *oldname, const char *newname, int 
 {
 	struct strbuf oldref = STRBUF_INIT, newref = STRBUF_INIT, logmsg = STRBUF_INIT;
 	struct strbuf oldsection = STRBUF_INIT, newsection = STRBUF_INIT;
+	const char *prefix_free_oldref = NULL;
+	const char *prefix_free_newref = NULL;
 	int recovery = 0;
 
 	if (!oldname) {
@@ -493,13 +495,17 @@ static void copy_or_rename_branch(const char *oldname, const char *newname, int 
 
 	reject_rebase_or_bisect_branch(oldref.buf);
 
+	/* At this point it should be safe to believe that the refs have the
+	   prefix "refs/heads" */
+	skip_prefix(oldref.buf, "refs/heads/", &prefix_free_oldref);
+	skip_prefix(newref.buf, "refs/heads/", &prefix_free_newref);
+
 	if (copy)
 		strbuf_addf(&logmsg, "Branch: copied %s to %s",
 			    oldref.buf, newref.buf);
 	else
 		strbuf_addf(&logmsg, "Branch: renamed %s to %s",
 			    oldref.buf, newref.buf);
-
 	if (!copy && rename_ref(oldref.buf, newref.buf, logmsg.buf))
 		die(_("Branch rename failed"));
 	if (copy && copy_existing_ref(oldref.buf, newref.buf, logmsg.buf))
@@ -508,10 +514,10 @@ static void copy_or_rename_branch(const char *oldname, const char *newname, int 
 	if (recovery) {
 		if (copy)
 			warning(_("Created a copy of a misnamed branch '%s'"),
-				oldref.buf + 11);
+				prefix_free_oldref);
 		else
 			warning(_("Renamed a misnamed branch '%s' away"),
-				oldref.buf + 11);
+				prefix_free_oldref);
 	}
 
 	if (!copy &&
@@ -520,9 +526,9 @@ static void copy_or_rename_branch(const char *oldname, const char *newname, int 
 
 	strbuf_release(&logmsg);
 
-	strbuf_addf(&oldsection, "branch.%s", oldref.buf + 11);
+	strbuf_addf(&oldsection, "branch.%s", prefix_free_oldref);
 	strbuf_release(&oldref);
-	strbuf_addf(&newsection, "branch.%s", newref.buf + 11);
+	strbuf_addf(&newsection, "branch.%s", prefix_free_newref);
 	strbuf_release(&newref);
 	if (!copy && git_config_rename_section(oldsection.buf, newsection.buf) < 0)
 		die(_("Branch is renamed, but update of config-file failed"));
