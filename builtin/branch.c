@@ -489,9 +489,9 @@ static void copy_or_rename_branch(const char *oldname, const char *newname, int 
 	 * cause the worktree to become inconsistent with HEAD, so allow it.
 	 */
 	if (!strcmp(oldname, newname))
-		validate_branchname(newname, &newref);
+		validate_branchname(newname, &newref, 0);
 	else
-		validate_new_branchname(newname, &newref, force);
+		validate_new_branchname(newname, &newref, force, 0);
 
 	reject_rebase_or_bisect_branch(oldref.buf);
 

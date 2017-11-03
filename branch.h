@@ -28,20 +28,59 @@ void create_branch(const char *name, const char *start_name,
 		   int force, int clobber_head_ok,
 		   int reflog, int quiet, enum branch_track track);
 
-/*
- * Check if 'name' can be a valid name for a branch; die otherwise.
- * Return 1 if the named branch already exists; return 0 otherwise.
- * Fill ref with the full refname for the branch.
- */
-extern int validate_branchname(const char *name, struct strbuf *ref);
+enum branch_validation_result {
+	/* Flags that convey there are fatal errors */
+	VALIDATION_FATAL_BRANCH_EXISTS_NO_FORCE = -3,
+	VALIDATION_FATAL_CANNOT_FORCE_UPDATE_CURRENT_BRANCH = -2,
+	VALIDATION_FATAL_INVALID_BRANCH_NAME = -1,
+	/* Flags that convey there are no fatal errors */
+	VALIDATION_PASS_BRANCH_DOESNT_EXIST = 0,
+	VALIDATION_PASS_BRANCH_EXISTS = 1,
+	VALIDATION_WARN_BRANCH_EXISTS = 2
+};
 
 /*
- * Check if a branch 'name' can be created as a new branch; die otherwise.
- * 'force' can be used when it is OK for the named branch already exists.
- * Return 1 if the named branch already exists; return 0 otherwise.
- * Fill ref with the full refname for the branch.
+ * Check if 'name' can be a valid name for a branch; die otherwise.
+ *
+ *   - name is the new branch name
+ *
+ *   - ref is used to return the full refname for the branch
+ *
+ * The return values have the following meaning,
+ *
+ *   - If 'gently' is 0, the function dies in case of a fatal error and returns
+ *     flags of 'branch_validation_result' that indicate nonfatal cases, otherwise.
+ *     The positive non-zero flag implies that the branch exists.
+ *
+ *   - If 'gently' is 1, the function doesn't die in case of a fatal error but returns
+ *     flags of 'branch_validaton_result' that identify the fatal error. The behaviour
+ *     in case of success is same as above.
+ *
  */
-extern int validate_new_branchname(const char *name, struct strbuf *ref, int force);
+extern enum branch_validation_result validate_branchname(const char *name, struct strbuf *ref, unsigned gently);
+
+/*
+ * Check if a branch 'name' can be created as a new branch.
+ *
+ *   - name is the new branch name
+ *
+ *   - ref is used to return the full refname for the branch
+ *
+ *   - force can be used when it is OK if the named branch already exists.
+ *     the currently checkout branch; with 'shouldnt_exist', it has no effect.
+ *
+ * The return values have the following meaning,
+ *
+ *   - If 'gently' is 0, the function dies in case of a fatal error and returns
+ *     flags of 'branch_validation_result' that indicate nonfatal cases, otherwise.
+ *     The positive non-zero flag implies that the branch can be force updated.
+ *
+ *   - If 'gently' is 1, the function doesn't die in case of a fatal error but returns
+ *     flags of 'branch_validaton_result' that identify the fatal error. The behaviour
+ *     in case of success is same as above.
+ *
+ */
+extern enum branch_validation_result validate_new_branchname(const char *name, struct strbuf *ref, int force, unsigned gently);
 
 /*
  * Remove information about the state of working on the current
