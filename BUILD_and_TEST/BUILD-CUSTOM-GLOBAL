@@ -3,6 +3,8 @@
 
 . BUILD-CUSTOM-COMMON
 
+CUSTOM_BUILD_LOCATION='${HOME}/.local'
+
 # Add custom alias for git that gets hidden
 # due to this installation
 setup_alias() {
@@ -29,8 +31,8 @@ warn "Read the script for more info"
 
 # Assumes configurations such as prefix etc.
 # have been specified in config.mak
-make
-make install
+make prefix=$CUSTOM_BUILD_LOCATION
+make prefix=$CUSTOM_BUILD_LOCATION install
 
 if [ $? == 0 ] && (type git 1>/dev/null 2>/dev/null) && [ -z "$CUSTOM_GLOBAL_GIT_ALIAS" ]
 then
