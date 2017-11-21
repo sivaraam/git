@@ -14,13 +14,14 @@ setup_alias() {
     echo "$(type -p git)"
   }
 
+  GIT=$1
   HIDDEN_GIT_ALIAS="hgit"
   CURR_GIT=$(get_current_git)
   notify "adding alias $HIDDEN_GIT_ALIAS for $CURR_GIT"
   add_to_bashrc "\n# Custom alias existing git that would get hidden"
   add_to_bashrc "alias $HIDDEN_GIT_ALIAS=\"$CURR_GIT\""
-  add_to_bashrc "alias git=\"$1\""
-  add_to_bashrc "# Define variable that denotes existence of 'git' alias"
+  add_to_bashrc "alias git=\"$GIT\""
+  add_to_bashrc "# Export variable that denotes existence of 'git' alias"
   add_to_bashrc "export CUSTOM_GLOBAL_GIT_ALIAS=1"
 
 }
