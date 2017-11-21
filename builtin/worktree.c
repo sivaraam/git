@@ -605,6 +605,23 @@ static int move_worktree(int ac, const char **av, const char *prefix)
 	return update_worktree_location(wt, dst.buf);
 }
 
+/* Removes the .git/worktrees/worktree_id directory for
+ * the given worktree_id
+ *
+ * Returns 0 on success and non-zero value in case of failure
+ */
+static int remove_worktree_entry(char *worktree_id) {
+	int ret = 0;
+	struct strbuf we_path = STRBUF_INIT;
+	strbuf_addstr(&we_path, git_common_path("worktrees/%s", worktree_id));
+	if (remove_dir_recursively(&we_path, 0)) {
+		error_errno(_("failed to delete '%s'"), we_path.buf);
+		ret = -1;
+	}
+	strbuf_release(&we_path);
+	return ret;
+}
+
 static int remove_worktree(int ac, const char **av, const char *prefix)
 {
 	int force = 0;
@@ -634,6 +651,16 @@ static int remove_worktree(int ac, const char **av, const char *prefix)
 			die(_("already locked, reason: %s"), reason);
 		die(_("already locked, no reason"));
 	}
+
+	if (!file_exists(wt->path)) {
+	/* There's a worktree entry but the worktree directory
+	 * doesn't exist. So, just remove the worktree entry.
+	 */
+		ret = remove_worktree_entry(wt->id);
+		free_worktrees(worktrees);
+		return ret;
+	}
+
 	if (validate_worktree(wt, 0))
 		return -1;
 
@@ -670,13 +697,7 @@ static int remove_worktree(int ac, const char **av, const char *prefix)
 		error_errno(_("failed to delete '%s'"), sb.buf);
 		ret = -1;
 	}
-	strbuf_reset(&sb);
-	strbuf_addstr(&sb, git_common_path("worktrees/%s", wt->id));
-	if (remove_dir_recursively(&sb, 0)) {
-		error_errno(_("failed to delete '%s'"), sb.buf);
-		ret = -1;
-	}
-	strbuf_release(&sb);
+	ret = remove_worktree_entry(wt->id);
 	free_worktrees(worktrees);
 	return ret;
 }
