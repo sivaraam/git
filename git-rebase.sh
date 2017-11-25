@@ -518,36 +518,40 @@ case "$onto_name" in
 esac
 
 # If the branch to rebase is given, that is the branch we will rebase
-# $branch_name -- branch being rebased, or HEAD (already detached)
+# $branch_or_commit -- branch/commit being rebased, or HEAD (already detached)
 # $orig_head -- commit object name of tip of the branch before rebasing
 # $head_name -- refs/heads/<that-branch> or "detached HEAD"
 switch_to=
 case "$#" in
 1)
 	# Is it "rebase other $branchname" or "rebase other $commit"?
-	branch_name="$1"
+	branch_or_commit="$1"
 	switch_to="$1"
 
-	if git show-ref --verify --quiet -- "refs/heads/$1" &&
-	   orig_head=$(git rev-parse -q --verify "refs/heads/$1")
+	# Is it a local branch?
+	if git show-ref --verify --quiet -- "refs/heads/$branch_or_commit" &&
+	   orig_head=$(git rev-parse -q --verify "refs/heads/$branch_or_commit")
 	then
-		head_name="refs/heads/$1"
-	elif orig_head=$(git rev-parse -q --verify "$1")
+		head_name="refs/heads/$branch_or_commit"
+
+	# If not is it a valid ref (branch or commit)?
+	elif orig_head=$(git rev-parse -q --verify "$branch_or_commit")
 	then
 		head_name="detached HEAD"
+
 	else
-		die "$(eval_gettext "fatal: no such branch: \$branch_name")"
+		die "$(eval_gettext "fatal: no such branch/commit: \$branch_or_commit")"
 	fi
 	;;
 0)
 	# Do not need to switch branches, we are already on it.
-	if branch_name=$(git symbolic-ref -q HEAD)
+	if branch_or_commit=$(git symbolic-ref -q HEAD)
 	then
-		head_name=$branch_name
-		branch_name=$(expr "z$branch_name" : 'zrefs/heads/\(.*\)')
+		head_name=$branch_or_commit
+		branch_or_commit=$(expr "z$branch_or_commit" : 'zrefs/heads/\(.*\)')
 	else
 		head_name="detached HEAD"
-		branch_name=HEAD ;# detached
+		branch_or_commit="HEAD"
 	fi
 	orig_head=$(git rev-parse --verify HEAD) || exit
 	;;
@@ -598,11 +602,11 @@ then
 		test -z "$switch_to" ||
 		GIT_REFLOG_ACTION="$GIT_REFLOG_ACTION: checkout $switch_to" \
 			git checkout -q "$switch_to" --
-		say "$(eval_gettext "Current branch \$branch_name is up to date.")"
+		say "$(eval_gettext "Current branch \$branch_or_commit is up to date.")"
 		finish_rebase
 		exit 0
 	else
-		say "$(eval_gettext "Current branch \$branch_name is up to date, rebase forced.")"
+		say "$(eval_gettext "Current branch \$branch_or_commit is up to date, rebase forced.")"
 	fi
 fi
 
@@ -632,7 +636,7 @@ git update-ref ORIG_HEAD $orig_head
 # we just fast-forwarded.
 if test "$mb" = "$orig_head"
 then
-	say "$(eval_gettext "Fast-forwarded \$branch_name to \$onto_name.")"
+	say "$(eval_gettext "Fast-forwarded \$branch_or_commit to \$onto_name.")"
 	move_to_original_branch
 	finish_rebase
 	exit 0
