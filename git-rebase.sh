@@ -477,7 +477,7 @@ then
 		;;
 	esac
 	upstream=$(peel_committish "${upstream_name}") ||
-	die "$(eval_gettext "invalid upstream \$upstream_name")"
+	die "$(eval_gettext "invalid upstream '\$upstream_name'")"
 	upstream_arg="$upstream_name"
 else
 	if test -z "$onto"
@@ -540,7 +540,7 @@ case "$#" in
 		head_name="detached HEAD"
 
 	else
-		die "$(eval_gettext "fatal: no such branch/commit: \$branch_or_commit")"
+		die "$(eval_gettext "fatal: no such branch/commit '\$branch_or_commit'")"
 	fi
 	;;
 0)
