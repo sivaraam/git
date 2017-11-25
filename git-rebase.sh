@@ -602,11 +602,23 @@ then
 		test -z "$switch_to" ||
 		GIT_REFLOG_ACTION="$GIT_REFLOG_ACTION: checkout $switch_to" \
 			git checkout -q "$switch_to" --
-		say "$(eval_gettext "Current branch \$branch_or_commit is up to date.")"
+		if test "$branch_or_commit" = "HEAD" &&
+			 ! git symbolic-ref -q HEAD
+		then
+			say "$(eval_gettext "HEAD is up to date.")"
+		else
+			say "$(eval_gettext "Current branch \$branch_or_commit is up to date.")"
+		fi
 		finish_rebase
 		exit 0
 	else
-		say "$(eval_gettext "Current branch \$branch_or_commit is up to date, rebase forced.")"
+		if test "$branch_or_commit" = "HEAD" &&
+			 ! git symbolic-ref -q HEAD
+		then
+			say "$(eval_gettext "HEAD is up to date, rebase forced.")"
+		else
+			say "$(eval_gettext "Current branch \$branch_or_commit is up to date, rebase forced.")"
+		fi
 	fi
 fi
 
