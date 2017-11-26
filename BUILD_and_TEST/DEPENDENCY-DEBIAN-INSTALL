@@ -1,17 +1,39 @@
 #! /bin/bash
-# Install/Remove the package dependencies on debian
+# Install/Remove the package dependencies for 'git' on debian
+# In case dependencies for docs are also to be insstalled define DOCS_INS
 
 zlib='zlib1g-dev'
 openssl='libssl-dev'
 curl='libcurl4-openssl-dev curl'
 
 DEPENDENCY="$zlib $openssl $curl"
+DOC_DEPENDENCY='asciidoc xmlto xsltproc'
 
-if [ "$1" != "rem" ]
+if test -n $DOCS_INS
 then
-    echo "Installing dependencies: $DEPENDENCY"
-    sudo apt-get update && sudo apt-get install $DEPENDENCY
+  DEP_TO_INSTALL="$DEPENDENCY $DOC_DEPENDENCY"
 else
-    echo "Removing dependencies: $DEPENDENCY"
-    sudo apt-get remove $DEPENDENCY
+  DEP_TO_INSTALL="$DEPENDENCY"
+fi
+
+
+if test "$1" != "list" &&
+   "$1" != "l"
+then
+  echo "Installing dependencies: $DEP_TO_INSTALL"
+  sudo apt-get update && sudo apt-get install $DEP_TO_INSTALL
+else
+  echo "Dependencies:"
+  for dep in $DEPENDENCY
+  do
+    echo '* '$dep
+  done
+
+  echo
+
+  echo "DOC dependencies:"
+  for ddep in $DOC_DEPENDENCY
+  do
+    echo '* '$ddep
+  done
 fi
