@@ -76,9 +76,10 @@ The configuration of submodules
 Submodule operations can be configured using the following mechanisms
 (from highest to lowest precedence):
 
- * The command line for those commands that support taking submodule
-   specifications. Most commands have a boolean flag '--recurse-submodules
-   whether to recurse into submodules. Examples are `ls-files` or `checkout`.
+ * The command line arguments of those commands that support taking submodule
+   specifications. Most commands have a boolean flag '--recurse-submodules'
+   which specify whether they should recurse into submodules. Examples are
+   `ls-files` or `checkout`.
    Some commands take enums, such as `fetch` and `push`, where you can
    specify how submodules are affected.
 
@@ -90,8 +91,8 @@ Submodule operations can be configured using the following mechanisms
 For example an effect from the submodule's `.gitignore` file
 would be observed when you run `git status --ignore-submodules=none` in
 the superproject. This collects information from the submodule's working
-directory by running `status` in the submodule, which does pay attention
-to its `.gitignore` file.
+directory by running `status` in the submodule while paying attention
+to the `.gitignore` file of the submodule.
 +
 The submodule's `$GIT_DIR/config` file would come into play when running
 `git push --recurse-submodules=check` in the superproject, as this would
@@ -107,13 +108,13 @@ If the submodule is not yet initialized, then the configuration
 inside the submodule does not exist yet, so configuration where to
 obtain the submodule from is configured here for example.
 
- * the `.gitmodules` file inside the superproject. Additionally to the
-   required mapping between submodule's name and path, a project usually
+ * The `.gitmodules` file inside the superproject. Additionally, if mapping
+   is required between a submodule's name and its path, a project usually
    uses this file to suggest defaults for the upstream collection
    of repositories.
 +
-This file mainly serves as the mapping between name and path in
-the superproject, such that the submodule's Git directory can be
+This file mainly serves as the mapping between the name and path of submodules
+in the superproject, such that the submodule's Git directory can be
 located.
 +
 If the submodule has never been initialized, this is the only place
