@@ -113,7 +113,7 @@ obtain the submodule from is configured here for example.
    of repositories.
 +
 This file mainly serves as the mapping between name and path in
-the superproject, such that the submodule's git directory can be
+the superproject, such that the submodule's Git directory can be
 located.
 +
 If the submodule has never been initialized, this is the only place
