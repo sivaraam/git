@@ -5,8 +5,37 @@
 # right directory and get access to common variables
 . BUILD-CUSTOM-COMMON
 
-temp_dir=/tmp/git-test
-mkdir -p ${temp_dir}
-sudo mount -t tmpfs -o size=50% tmpfs ${temp_dir}
-make $BUILD_OPTS GIT_TEST_OPTS="--root=${temp_dir}" DEFAULT_TEST_TARGET=prove GIT_PROVE_OPTS='--timer --jobs 16' test
-sudo umount ${temp_dir}
+if [ -z "$1" ]
+then
+  echo "Specify the range of commits that should be tested"
+  exit 1
+fi
+
+range=$1
+
+# Create a temporary directory
+temp_dir=$(mktemp -d)
+
+# Checkout a new worktree for testing the current repository
+git worktree add --detach ${temp_dir} # HEAD
+
+# Copy the config.mak file
+cp config.mak ${temp_dir}
+
+# Switch to the worktree
+cd ${temp_dir}
+
+# Start the tests for that range
+# Assumes git-test (https://github.com/mhaggerty/git-test) is installed
+# and test.default.command has been configured
+if echo "$1" | grep '\.\.'
+then
+  git test run "$1" -f
+else
+  # there's no .. or ... syntax
+  # range is against HEAD
+  git test run "$1.." -f
+fi
+
+# Remove the temporary directory
+# rm -rf ${temp_dir}
