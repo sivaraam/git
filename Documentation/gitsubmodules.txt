@@ -63,6 +63,9 @@ Submodules can be used for at least two different use cases:
     * Transfer size:
       In its current form Git requires the whole working tree present. It
       does not allow partial trees to be transferred in fetch or clone.
+      If the project you work on consists of multiple repositories tied
+      together as submodules in a superproject, you can avoid fetching the
+      working trees of the repositories you are not interested in.
     * Access control:
       By restricting user access to submodules, this can be used to implement
       read/write policies for different users.
