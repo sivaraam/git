@@ -57,7 +57,7 @@ Submodules can be used for at least two different use cases:
     * Size of the git repository:
       In its current form Git scales up poorly for large repositories containing
       content that is not compressed by delta computation between trees.
-      However you can also use submodules to e.g. hold large binary assets
+      Therefore you can use submodules to hold large binary assets
       and these repositories are then shallowly cloned such that you do not
       have a large history locally.
     * Transfer size:
