@@ -76,9 +76,9 @@ The configuration of submodules
 Submodule operations can be configured using the following mechanisms
 (from highest to lowest precedence):
 
- * The command line for those commands that support taking submodule specs.
-   Most commands have a boolean flag '--recurse-submodules' whether to
-   recurse into submodules. Examples are `ls-files` or `checkout`.
+ * The command line for those commands that support taking submodule
+   specifications. Most commands have a boolean flag '--recurse-submodules'
+   whether to recurse into submodules. Examples are `ls-files` or `checkout`.
    Some commands take enums, such as `fetch` and `push`, where you can
    specify how submodules are affected.
 
