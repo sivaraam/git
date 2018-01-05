@@ -137,7 +137,7 @@ branches, adds to that list.
 Retrieves the URLs for a remote. Configurations for `insteadOf` and
 `pushInsteadOf` are expanded here. By default, only the first URL is listed.
 +
-With `--push`, push URLs are queried rather than fetch URLs.
+With `--push`, only push URLs are queried.
 +
 With `--all`, all URLs for the remote will be listed.
 
@@ -147,7 +147,7 @@ Changes URLs for the remote. Sets first URL for remote <name> that matches
 regex <oldurl> (first URL if no <oldurl> is given) to <newurl>. If
 <oldurl> doesn't match any URL, an error occurs and nothing is changed.
 +
-With `--push`, push URLs are manipulated instead of fetch URLs.
+With `--push`, only push URLs are manipulated.
 +
 With `--add`, instead of changing existing URLs, new URL is added.
 +
