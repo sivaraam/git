@@ -54,7 +54,7 @@ Submodules can be used for at least two different use cases:
    overcome current limitations of Git's implementation to have
    finer grained access:
 
-    * Size of the git repository:
+    * Size of the Git repository:
       In its current form Git scales up poorly for large repositories containing
       content that is not compressed by delta computation between trees.
       Therefore you can use submodules to hold large binary assets
@@ -113,7 +113,7 @@ obtain the submodule from is configured here for example.
    of repositories.
 +
 This file mainly serves as the mapping between name and path in
-the superproject, such that the submodule's git directory can be
+the superproject, such that the submodule's Git directory can be
 located.
 +
 If the submodule has never been initialized, this is the only place
@@ -140,8 +140,8 @@ directory is automatically moved to `$GIT_DIR/modules/<name>/`
 of the superproject.
 
  * Deinitialized submodule: A `gitlink`, and a `.gitmodules` entry,
-but no submodule working directory. The submodule’s git directory
-may be there as after deinitializing the git directory is kept around.
+but no submodule working directory. The submodule’s Git directory
+may be there as after deinitializing the Git directory is kept around.
 The directory which is supposed to be the working directory is empty instead.
 +
 A submodule can be deinitialized by running `git submodule deinit`.
