@@ -36,8 +36,8 @@ The `gitlink` entry contains the object name of the commit that the
 superproject expects the submodule’s working directory to be at.
 
 The section `submodule.foo.*` in the `.gitmodules` file gives additional
-hints to Gits porcelain layer such as where to obtain the submodule via
-the `submodule.foo.url` setting.
+hints to Gits porcelain layer. For example, the `submodule.foo.url`
+setting specifies where to obtain the submodule.
 
 Submodules can be used for at least two different use cases:
 
