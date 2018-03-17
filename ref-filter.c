@@ -1310,8 +1310,16 @@ char *get_head_description(void)
 	wt_status_get_state(&state, 1);
 	if (state.rebase_in_progress ||
 	    state.rebase_interactive_in_progress)
+	{
+		const char *rebasing = NULL;
+		if (state.branch != NULL)
+			rebasing = state.branch;
+		else
+			rebasing = state.detached_from;
+
 		strbuf_addf(&desc, _("(no branch, rebasing %s)"),
-			    state.branch);
+			    rebasing);
+	}
 	else if (state.bisect_in_progress)
 		strbuf_addf(&desc, _("(no branch, bisect started on %s)"),
 			    state.branch);
