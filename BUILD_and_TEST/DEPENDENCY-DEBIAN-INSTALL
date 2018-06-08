@@ -5,8 +5,9 @@
 zlib='zlib1g-dev'
 openssl='libssl-dev'
 curl='libcurl4-openssl-dev curl'
+expat=' libexpat1-dev'
 
-DEPENDENCY="$zlib $openssl $curl"
+DEPENDENCY="$zlib $openssl $curl $expat"
 DOC_DEPENDENCY='asciidoc xmlto xsltproc'
 
 if test -n $DOCS_INS
