@@ -18,7 +18,7 @@ fi
 
 
 if test "$1" != "list" &&
-   "$1" != "l"
+   test "$1" != "l"
 then
   echo "Installing dependencies: $DEP_TO_INSTALL"
   sudo apt-get update && sudo apt-get install $DEP_TO_INSTALL
