@@ -1,0 +1,42 @@
+#!/bin/sh
+#
+# A script for the cron job that automatically fetches
+# updates for the 'next' branch of Git and builds and
+# installs the binary from source.
+#
+# The build succeeds only if the config.mak is present
+# in the directory with appropriate configuration.
+#
+# The binary is installed into the default location if
+# a prefix is not specified in the config.mak file.
+# Bringing the binary into use is in the hands of the user.
+# Hint: A bash alias might help.
+
+GIT_NEXT_BUILD_AUTOMATE_DIR='/mnt/Source/Git/git-next-build-automate'
+LOG_FILE="$GIT_NEXT_BUILD_AUTOMATE_DIR/GIT-NEXT-INSTALLATION-LOG.txt"
+LOG_MSG_COMMON="installation of git 'next' build on $(date)"
+
+if cd "$GIT_NEXT_BUILD_AUTOMATE_DIR"
+then
+	# Fetch the remote changes
+	if git fetch origin next && git checkout FETCH_HEAD
+	then
+		if make install
+		then
+			GIT_NEXT_BUILD_STATUS=0
+		else
+			GIT_NEXT_BUILD_STATUS=1
+		fi
+	else
+		GIT_NEXT_BUILD_STATUS=1
+	fi
+else
+	GIT_NEXT_BUILD_STATUS=1
+fi
+
+if test $GIT_NEXT_BUILD_STATUS -eq 0
+then
+	echo "SUCCESS: $LOG_MSG_COMMON" >>"$LOG_FILE" 
+else
+	echo "FAILURE: $LOG_MSG_COMMON" >>"$LOG_FILE"
+fi
