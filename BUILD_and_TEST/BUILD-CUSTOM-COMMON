@@ -5,7 +5,12 @@ add_to_bashrc() {
 }
 
 # Move to the location where the Makefile is present
-cd ..
+if cd ..
+then
+  :
+else
+  exit $?
+fi
 
 # Colour Escape codes
 WARN='\033[0;31m'

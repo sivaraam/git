@@ -32,11 +32,13 @@ warn "Read the script for more info"
 
 # Assumes configurations such as prefix etc.
 # have been specified in config.mak
-make prefix=$CUSTOM_BUILD_LOCATION
-make prefix=$CUSTOM_BUILD_LOCATION install
-
-if [ $? == 0 ] && (type git 1>/dev/null 2>/dev/null) && [ -z "$CUSTOM_GLOBAL_GIT_ALIAS" ]
+if make prefix=$CUSTOM_BUILD_LOCATION install
 then
-  CUSTOM_GIT_BINARY="$CUSTOM_BUILD_LOCATION/bin/git"
-  setup_alias $CUSTOM_GIT_BINARY
+  if (type git 1>/dev/null 2>/dev/null) && [ -z "$CUSTOM_GLOBAL_GIT_ALIAS" ]
+  then
+    CUSTOM_GIT_BINARY="$CUSTOM_BUILD_LOCATION/bin/git"
+    setup_alias $CUSTOM_GIT_BINARY
+  fi
+else
+  exit $?
 fi

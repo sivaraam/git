@@ -20,10 +20,13 @@ setup_alias() {
 
 # Assumes configurations such as NO_GETTEXT=1 etc.
 # have been specified in config.mak
-make
-
-if [ $? == 0 ] && [ -z "$CUSTOM_TEST_GIT_ALIAS" ]
+if make
 then
-  notify 'Adding alias for test build'
-  setup_alias
+  if [ -z "$CUSTOM_TEST_GIT_ALIAS" ]
+  then
+    notify 'Adding alias for test build'
+    setup_alias
+  fi
+else
+  exit $?
 fi
