@@ -2,7 +2,8 @@
 #
 # A script for the cron job that automatically fetches
 # updates for the 'next' branch of Git and builds and
-# installs the binary from source.
+# installs the binary from source. Typically placed in
+# '/etc/cron.daily' or similar.
 #
 # The build succeeds only if the config.mak is present
 # in the directory with appropriate configuration.
@@ -36,7 +37,7 @@ fi
 
 if test $GIT_NEXT_BUILD_STATUS -eq 0
 then
-	echo "SUCCESS: $LOG_MSG_COMMON" >>"$LOG_FILE" 
+	echo "SUCCESS: $LOG_MSG_COMMON" >>"$LOG_FILE"
 else
 	echo "FAILURE: $LOG_MSG_COMMON" >>"$LOG_FILE"
 fi
