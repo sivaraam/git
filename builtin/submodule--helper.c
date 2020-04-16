@@ -2246,6 +2246,44 @@ static int module_config(int argc, const char **argv, const char *prefix)
 	usage_with_options(git_submodule_helper_usage, module_config_options);
 }
 
+static int module_set_url(int argc, const char **argv, const char *prefix)
+{
+	int quiet = 0;
+	const char *newurl;
+	const char *path;
+	struct strbuf config_name = STRBUF_INIT;
+
+	struct option set_url_options[] = {
+		OPT__QUIET(&quiet, N_("Suppress output for setting url of a submodule")),
+		OPT_END()
+	};
+
+	const char *const usage[] = {
+		N_("git submodule--helper set-url [--quiet] <path> <newurl>"),
+		NULL
+	};
+
+	argc = parse_options(argc, argv, prefix, set_url_options,
+			     usage, 0);
+
+	if (argc!=2) {
+		usage_with_options(usage, set_url_options);
+		return 1;
+	}
+
+	path = argv[0];
+	newurl = argv[1];
+
+	strbuf_addf(&config_name, "submodule.%s.url", path);
+
+	config_set_in_gitmodules_file_gently(config_name.buf, newurl);
+	sync_submodule(path, prefix, quiet ? OPT_QUIET : 0);
+
+	strbuf_release(&config_name);
+
+	return 0;
+}
+
 #define SUPPORT_SUPER_PREFIX (1<<0)
 
 struct cmd_struct {
@@ -2276,6 +2314,7 @@ static struct cmd_struct commands[] = {
 	{"is-active", is_active, 0},
 	{"check-name", check_name, 0},
 	{"config", module_config, 0},
+	{"set-url", module_set_url, 0},
 };
 
 int cmd_submodule__helper(int argc, const char **argv, const char *prefix)
