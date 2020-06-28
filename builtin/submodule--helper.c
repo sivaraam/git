@@ -1053,8 +1053,8 @@ static void generate_submodule_summary(struct summary_cb *info,
 	char *displaypath;
 	int errmsg = 0;
 	int total_commits = -1;
-	char *sm_git_dir = xstrfmt("%s/.git", p->sm_path);
 	int is_sm_git_dir = 0;
+	struct strbuf sm_git_dir_sb = STRBUF_INIT;
 
 	if (!info->cached && !oidcmp(&p->oid_dst, &null_oid)) {
 		if (S_ISGITLINK(p->mod_dst)) {
@@ -1099,7 +1099,8 @@ static void generate_submodule_summary(struct summary_cb *info,
 		}
 	}
 
-	if (is_git_directory(sm_git_dir))
+	strbuf_addstr(&sm_git_dir_sb, p->sm_path);
+	if (is_nonbare_repository_dir(&sm_git_dir_sb))
 		is_sm_git_dir = 1;
 
 	if (is_sm_git_dir && S_ISGITLINK(p->mod_src))
@@ -1149,8 +1150,8 @@ static void generate_submodule_summary(struct summary_cb *info,
 	print_summary(info, errmsg, total_commits, missing_src, missing_dst,
 		      displaypath, is_sm_git_dir, p);
 
+	strbuf_release(&sm_git_dir_sb);
 	free(displaypath);
-	free(sm_git_dir);
 }
 
 static void prepare_submodule_summary(struct summary_cb *info,
