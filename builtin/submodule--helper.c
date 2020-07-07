@@ -1137,14 +1137,9 @@ static void generate_submodule_summary(struct summary_cb *info,
 			prepare_submodule_repo_env(&cp_rev_list.env_array);
 
 			argv_array_pushl(&cp_rev_list.args, "rev-list",
-					 "--first-parent", range, "--", NULL);
-			if (!capture_command(&cp_rev_list, &sb_rev_list, 0)) {
-				if (sb_rev_list.len)
-					total_commits = count_lines(sb_rev_list.buf,
-								    sb_rev_list.len);
-				else
-					total_commits = 0;
-			}
+					 "--first-parent", "--count", range, "--", NULL);
+			if (!capture_command(&cp_rev_list, &sb_rev_list, 0))
+				total_commits = atoi(sb_rev_list.buf);
 
 			free(range);
 			strbuf_release(&sb_rev_list);
