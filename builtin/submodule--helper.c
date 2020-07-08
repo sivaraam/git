@@ -960,44 +960,41 @@ enum diff_cmd {
 	DIFF_FILES
 };
 
-static int verify_submodule_committish(const char *sm_path,
-					  const char *committish)
+static char* verify_submodule_committish(const char *sm_path,
+					 const char *committish)
 {
 	struct child_process cp_rev_parse = CHILD_PROCESS_INIT;
+	struct strbuf result = STRBUF_INIT;
 
 	cp_rev_parse.git_cmd = 1;
-	cp_rev_parse.no_stdout = 1;
 	cp_rev_parse.dir = sm_path;
 	prepare_submodule_repo_env(&cp_rev_parse.env_array);
 	argv_array_pushl(&cp_rev_parse.args, "rev-parse", "-q",
-			 "--verify", NULL);
+			 "--short=7", NULL);
 	argv_array_pushf(&cp_rev_parse.args, "%s^0", committish);
 	argv_array_push(&cp_rev_parse.args, "--");
 
-	if (run_command(&cp_rev_parse))
-		return 1;
-
-	return 0;
+	if (capture_command(&cp_rev_parse, &result, 0))
+		return NULL;
+	strbuf_trim_trailing_newline(&result);
+	return strbuf_detach(&result, NULL);
 }
 
 static void print_submodule_summary(struct summary_cb *info, int errmsg,
-				      int total_commits, int missing_src,
-				      int missing_dst, const char *displaypath,
-				      struct module_cb *p)
+				    int total_commits, const char *displaypath,
+				    const char *src_abbrev, const char *dst_abbrev,
+				    int missing_src, int missing_dst, struct module_cb *p)
 {
 	if (p->status == 'T') {
 		if (S_ISGITLINK(p->mod_dst))
 			printf(_("* %s %s(blob)->%s(submodule)"),
-				 displaypath, find_unique_abbrev(&p->oid_src, 7),
-				 find_unique_abbrev(&p->oid_dst, 7));
+				 displaypath, src_abbrev, dst_abbrev);
 		else
 			printf(_("* %s %s(submodule)->%s(blob)"),
-				 displaypath, find_unique_abbrev(&p->oid_src, 7),
-				 find_unique_abbrev(&p->oid_dst, 7));
+				 displaypath, src_abbrev, dst_abbrev);
 	} else {
 		printf("* %s %s...%s",
-			displaypath, find_unique_abbrev(&p->oid_src, 7),
-			find_unique_abbrev(&p->oid_dst, 7));
+			displaypath, src_abbrev, dst_abbrev);
 	}
 
 	if (total_commits < 0)
@@ -1056,9 +1053,8 @@ static void print_submodule_summary(struct summary_cb *info, int errmsg,
 static void generate_submodule_summary(struct summary_cb *info,
 				       struct module_cb *p)
 {
-	int missing_src = 0;
-	int missing_dst = 0;
-	char *displaypath;
+	char *displaypath, *src_abbrev = NULL, *dst_abbrev = NULL;
+	int missing_src = 0, missing_dst = 0;
 	int errmsg = 0;
 	int total_commits = -1;
 
@@ -1098,17 +1094,58 @@ static void generate_submodule_summary(struct summary_cb *info,
 		}
 	}
 
-	if (S_ISGITLINK(p->mod_src))
-		missing_src = verify_submodule_committish(p->sm_path,
-							   oid_to_hex(&p->oid_src));
+	if (S_ISGITLINK(p->mod_src)) {
+		src_abbrev = verify_submodule_committish(p->sm_path,
+							 oid_to_hex(&p->oid_src));
+		if (!src_abbrev) {
+			missing_src = 1;
 
-	if (S_ISGITLINK(p->mod_dst))
-		missing_dst = verify_submodule_committish(p->sm_path,
-							   oid_to_hex(&p->oid_dst));
+			/*
+			 * As `rev-parse` failed, we fallback to getting
+			 * the abbreviated hash using oid_src. We do
+			 * this as we might still need the abbreviated
+			 * hash in cases like a submodule type change, etc.
+			 */
+			src_abbrev = xstrndup(oid_to_hex(&p->oid_src), 7);
+		}
+	}
+	else {
+		/*
+		 * The source does not point to a submodule.
+		 * So, we fallback to getting the abbreviation using
+		 * oid_src as we might still need the abbreviated
+		 * hash in cases like submodule add, etc.
+		 */
+		src_abbrev = xstrndup(oid_to_hex(&p->oid_src), 7);
+	}
+
+	if (S_ISGITLINK(p->mod_dst)) {
+		dst_abbrev = verify_submodule_committish(p->sm_path,
+							 oid_to_hex(&p->oid_dst));
+		if (!dst_abbrev) {
+			missing_dst = 1;
+
+			/*
+			 * As `rev-parse` failed, we fallback to getting
+			 * the abbreviated hash using oid_dst. We do
+			 * this as we might still need the abbreviated
+			 * hash in cases like a submodule type change, etc.
+			 */
+			dst_abbrev = xstrndup(oid_to_hex(&p->oid_dst), 7);
+		}
+	}
+	else {
+		/*
+		 * The destination does not point to a submodule.
+		 * So, we fallback to getting the abbreviation using
+		 * oid_dst as we might still need the abbreviated
+		 * hash in cases like a submodule removal, etc.
+		 */
+		dst_abbrev = xstrndup(oid_to_hex(&p->oid_dst), 7);
+	}
 
 	displaypath = get_submodule_displaypath(p->sm_path, info->prefix);
-
-	if (!missing_dst && !missing_src) {
+	if (!missing_src && !missing_dst) {
 		struct child_process cp_rev_list = CHILD_PROCESS_INIT;
 		struct strbuf sb_rev_list = STRBUF_INIT;
 
@@ -1138,10 +1175,11 @@ static void generate_submodule_summary(struct summary_cb *info,
 	}
 
 	print_submodule_summary(info, errmsg, total_commits,
-				missing_src, missing_dst,
-				displaypath, p);
-
-	free(displaypath);
+				displaypath, src_abbrev,
+				dst_abbrev, missing_src,
+				missing_dst, p);
+	free(src_abbrev);
+	free(dst_abbrev);
 }
 
 static void prepare_submodule_summary(struct summary_cb *info,
