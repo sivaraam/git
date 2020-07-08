@@ -1155,6 +1155,7 @@ static void generate_submodule_summary(struct summary_cb *info,
 static void prepare_submodule_summary(struct summary_cb *info,
 				      struct module_cb_list *list)
 {
+	const struct submodule *sub;
 	int i;
 	for (i = 0; i < list->nr; i++) {
 		struct module_cb *p = list->entries[i];
@@ -1165,26 +1166,22 @@ static void prepare_submodule_summary(struct summary_cb *info,
 			continue;
 		}
 
-		if (info->for_status) {
-			char *config_key;
-			const char *ignore_config = "none";
-			const char *value;
-			const struct submodule *sub = submodule_from_path(the_repository,
-									  &null_oid,
-									  p->sm_path);
+		if (info->for_status && p->status != 'A' &&
+		    (sub = submodule_from_path(the_repository,
+					       &null_oid, p->sm_path))) {
+			char *config_key = NULL;
+			const char *ignore_config = "none", *value;
 
-			if (sub && p->status != 'A') {
-				config_key = xstrfmt("submodule.%s.ignore",
-						     sub->name);
-				if (!git_config_get_string_const(config_key, &value))
-					ignore_config = value;
-				else if (sub->ignore)
-					ignore_config = sub->ignore;
-
-				free(config_key);
-				if (!strcmp(ignore_config, "all"))
-					continue;
-			}
+			config_key = xstrfmt("submodule.%s.ignore",
+					     sub->name);
+			if (!git_config_get_string_const(config_key, &value))
+				ignore_config = value;
+			else if (sub->ignore)
+				ignore_config = sub->ignore;
+			
+			free(config_key);
+			if (!strcmp(ignore_config, "all"))
+				continue;
 		}
 
 		/* Also show added or modified modules which are checked out */
