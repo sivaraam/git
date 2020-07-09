@@ -983,7 +983,7 @@ static int verify_submodule_committish(const char *sm_path,
 static void print_submodule_summary(struct summary_cb *info, int errmsg,
 				      int total_commits, int missing_src,
 				      int missing_dst, const char *displaypath,
-				      int is_sm_git_dir, struct module_cb *p)
+				      struct module_cb *p)
 {
 	if (p->status == 'T') {
 		if (S_ISGITLINK(p->mod_dst))
@@ -1023,7 +1023,7 @@ static void print_submodule_summary(struct summary_cb *info, int errmsg,
 				       displaypath, oid_to_hex(&p->oid_dst));
 			}
 		}
-	} else if (is_sm_git_dir) {
+	} else {
 		struct child_process cp_log = CHILD_PROCESS_INIT;
 
 		cp_log.git_cmd = 1;
@@ -1061,8 +1061,6 @@ static void generate_submodule_summary(struct summary_cb *info,
 	char *displaypath;
 	int errmsg = 0;
 	int total_commits = -1;
-	int is_sm_git_dir = 0;
-	struct strbuf sm_git_dir_sb = STRBUF_INIT;
 
 	if (!info->cached && oideq(&p->oid_dst, &null_oid)) {
 		if (S_ISGITLINK(p->mod_dst)) {
@@ -1104,56 +1102,49 @@ static void generate_submodule_summary(struct summary_cb *info,
 		}
 	}
 
-	strbuf_addstr(&sm_git_dir_sb, p->sm_path);
-	if (is_nonbare_repository_dir(&sm_git_dir_sb))
-		is_sm_git_dir = 1;
-
-	if (is_sm_git_dir && S_ISGITLINK(p->mod_src))
+	if (S_ISGITLINK(p->mod_src))
 		missing_src = verify_submodule_committish(p->sm_path,
 							   oid_to_hex(&p->oid_src));
 
-	if (is_sm_git_dir && S_ISGITLINK(p->mod_dst))
+	if (S_ISGITLINK(p->mod_dst))
 		missing_dst = verify_submodule_committish(p->sm_path,
 							   oid_to_hex(&p->oid_dst));
 
 	displaypath = get_submodule_displaypath(p->sm_path, info->prefix);
 
 	if (!missing_dst && !missing_src) {
-		if (is_sm_git_dir) {
-			struct child_process cp_rev_list = CHILD_PROCESS_INIT;
-			struct strbuf sb_rev_list = STRBUF_INIT;
-			char *range;
+		struct child_process cp_rev_list = CHILD_PROCESS_INIT;
+		struct strbuf sb_rev_list = STRBUF_INIT;
+		char *range;
 
-			if (S_ISGITLINK(p->mod_src) && S_ISGITLINK(p->mod_dst))
-				range = xstrfmt("%s...%s", oid_to_hex(&p->oid_src),
-						oid_to_hex(&p->oid_dst));
-			else if (S_ISGITLINK(p->mod_src))
-				range = xstrdup(oid_to_hex(&p->oid_src));
-			else
-				range = xstrdup(oid_to_hex(&p->oid_dst));
+		if (S_ISGITLINK(p->mod_src) && S_ISGITLINK(p->mod_dst))
+			range = xstrfmt("%s...%s", oid_to_hex(&p->oid_src),
+					oid_to_hex(&p->oid_dst));
+		else if (S_ISGITLINK(p->mod_src))
+			range = xstrdup(oid_to_hex(&p->oid_src));
+		else
+			range = xstrdup(oid_to_hex(&p->oid_dst));
 
-			cp_rev_list.git_cmd = 1;
-			cp_rev_list.dir = p->sm_path;
-			prepare_submodule_repo_env(&cp_rev_list.env_array);
+		cp_rev_list.git_cmd = 1;
+		cp_rev_list.dir = p->sm_path;
+		prepare_submodule_repo_env(&cp_rev_list.env_array);
 
-			argv_array_pushl(&cp_rev_list.args, "rev-list",
-					 "--first-parent", "--count", range, "--", NULL);
-			if (!capture_command(&cp_rev_list, &sb_rev_list, 0))
-				total_commits = atoi(sb_rev_list.buf);
+		argv_array_pushl(&cp_rev_list.args, "rev-list",
+					"--first-parent", "--count", range, "--", NULL);
+		if (!capture_command(&cp_rev_list, &sb_rev_list, 0))
+			total_commits = atoi(sb_rev_list.buf);
 
-			free(range);
-			strbuf_release(&sb_rev_list);
-		}
+		free(range);
+		strbuf_release(&sb_rev_list);
 	} else {
 		errmsg = 1;
 	}
 
 	print_submodule_summary(info, errmsg, total_commits,
 				missing_src, missing_dst,
-		      		displaypath, is_sm_git_dir, p);
+				displaypath, p);
 
 	free(displaypath);
-	strbuf_release(&sm_git_dir_sb);
 }
 
 static void prepare_submodule_summary(struct summary_cb *info,
