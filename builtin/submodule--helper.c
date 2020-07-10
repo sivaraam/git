@@ -1010,7 +1010,7 @@ static void print_submodule_summary(struct summary_cb *info, int errmsg,
 		 * Don't give error msg for modification whose dst is not
 		 * submodule, i.e. deleted or changed to blob
 		 */
-		if (S_ISGITLINK(p->mod_src)) {
+		if (S_ISGITLINK(p->mod_dst)) {
 			if (missing_src && missing_dst) {
 				printf(_("  Warn: %s doesn't contain commits %s and %s\n"),
 				       displaypath, oid_to_hex(&p->oid_src),
