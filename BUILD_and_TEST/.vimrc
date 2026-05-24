@@ -1,6 +1,8 @@
 " ~/.vimrc (or drop in your project as .vim/vimrc)
 " Tuned for git project C coding guidelines:
 " https://git-scm.com/docs/CodingGuidelines
+set encoding=utf-8
+scriptencoding utf-8
 
 " ── Indentation ──────────────────────────────────────────────────────────────
 " "We use tabs to indent, and interpret tabs as taking up to 8 spaces."
@@ -46,7 +48,7 @@ set cinkeys=0{,0},0),:,0#,!^F,o,O,e
 " ── Show invisible characters ────────────────────────────────────────────────
 " Makes stray spaces inside indentation immediately visible.
 set list
-set listchars=tab:»\ ,trail:·,extends:>,precedes:
+set listchars=tab:»\ ,trail:·,extends:>,precedes:<
 
 " ── Search ───────────────────────────────────────────────────────────────────
 set hlsearch
