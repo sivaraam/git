@@ -74,4 +74,45 @@ test_expect_success 'setup: .git as an empty directory is ignored' '
 	)
 '
 
+test_expect_success 'setup: --git-dir pointing to an invalid directory is rejected' '
+	test_when_finished "rm -rf parent/empty-dir" &&
+	mkdir -p parent/empty-dir &&
+	test_must_fail git --git-dir parent/empty-dir rev-parse --is-bare-repository 2>stderr &&
+	test_grep "not a git repository" stderr
+'
+
+test_expect_success 'setup: discovery fails when GIT_DIR points to an invalid directory' '
+	test_must_fail env GIT_DIR="/path/to/does-not-exist" \
+		git rev-parse --is-bare-repository 2>stderr &&
+	test_grep "not a git repository" stderr
+'
+
+test_expect_success 'setup: command that does not need a repository stays silent for invalid GIT_DIR' '
+	echo x | GIT_DIR="/path/to/does-not-exist" git hash-object --stdin 2>stderr &&
+	test_must_be_empty stderr
+'
+
+test_expect_success 'setup: discovery fails when a valid git directory not found within GIT_CEILING_DIRECTORIES' '
+	test_when_finished "rm -rf parent/no-valid-git-directory-within-ceiling" &&
+	mkdir -p parent/no-valid-git-directory-within-ceiling/ceil/sub &&
+	(
+		cd parent/no-valid-git-directory-within-ceiling/ceil/sub &&
+		test_must_fail env GIT_CEILING_DIRECTORIES="$(pwd)/../../" \
+			git rev-parse --is-bare-repository 2>stderr &&
+		test_grep "not a git repository (or any of the parent directories)" stderr
+	)
+'
+
+test_expect_success 'setup: discovery fails with unusable $GIT_OBJECT_DIRECTORY and explicit gitdir' '
+	test_when_finished "rm -rf parent/invalid-git-object-directory-config" &&
+	mkdir -p parent/invalid-git-object-directory-config &&
+	(
+		cd parent/invalid-git-object-directory-config &&
+		git init --bare real-repo &&
+		test_must_fail env GIT_OBJECT_DIRECTORY="/path/to/does-not-exist" \
+			git --git-dir real-repo rev-parse --is-bare-repository 2>stderr &&
+		test_grep "not a git repository" stderr
+	)
+'
+
 test_done
