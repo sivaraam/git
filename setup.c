@@ -1905,8 +1905,7 @@ const char *enter_repo(struct repository *repo, const char *path, unsigned flags
 		if (chdir(used_path.buf))
 			return NULL;
 		path = validated_path.buf;
-	}
-	else {
+	} else {
 		const char *gitfile = read_gitfile(path);
 		if (!(flags & ENTER_REPO_ANY_OWNER_OK))
 			die_upon_dubious_ownership(gitfile, NULL, path);
