@@ -78,13 +78,15 @@ test_expect_success 'setup: --git-dir pointing to an invalid directory is reject
 	test_when_finished "rm -rf parent/empty-dir" &&
 	mkdir -p parent/empty-dir &&
 	test_must_fail git --git-dir parent/empty-dir rev-parse --is-bare-repository 2>stderr &&
-	test_grep "not a git repository" stderr
+	test_grep "not a git repository" stderr &&
+	test_grep "taken from \$GIT_DIR" stderr
 '
 
 test_expect_success 'setup: discovery fails when GIT_DIR points to an invalid directory' '
 	test_must_fail env GIT_DIR="/path/to/does-not-exist" \
 		git rev-parse --is-bare-repository 2>stderr &&
-	test_grep "not a git repository" stderr
+	test_grep "not a git repository" stderr &&
+	test_grep "taken from \$GIT_DIR" stderr
 '
 
 test_expect_success 'setup: command that does not need a repository stays silent for invalid GIT_DIR' '

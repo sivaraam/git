@@ -1152,7 +1152,13 @@ static void repo_discover_explicit_gitdir(struct repo_discovery *discovery,
 			*nongit_ok = 1;
 			goto out;
 		}
-		die(_("not a git repository: '%s'"), gitdirenv);
+		/*
+		 * TRANSLATORS: The first %s is a path, the second %s is the
+		 * name of the environment variable it was taken from.
+		 */
+		die(_("not a git repository: '%s'\n"
+		      "this path was taken from $%s (which can also be set with --git-dir or --bare)"),
+		    gitdirenv, GIT_DIR_ENVIRONMENT);
 	}
 
 	if (read_and_verify_repository_format(&discovery->format, gitdirenv, nongit_ok))
