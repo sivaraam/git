@@ -1997,9 +1997,32 @@ static void repo_discover(struct repo_discovery *discovery, int *nongit_ok)
 		repo_discover_bare_gitdir(discovery, &cwd, dir.len, nongit_ok);
 		break;
 	case GIT_DIR_HIT_CEILING:
-		if (!nongit_ok)
-			die(_("not a git repository (or any of the parent directories): %s"),
-			    DEFAULT_GIT_DIR_ENVIRONMENT);
+		if (!nongit_ok) {
+			struct strbuf message = STRBUF_INIT;
+			const char *ceiling = getenv(CEILING_DIRECTORIES_ENVIRONMENT);
+
+			strbuf_addf(&message,
+				    /*
+				     * TRANSLATORS: The first %s is ".git", the
+				     * second and third %s are the directories
+				     * where the search for a repository started
+				     * and where it stopped.
+				     */
+				    _("not a git repository (or any of the parent directories): %s\n"
+				      "searched from '%s' up to '%s'"),
+				    DEFAULT_GIT_DIR_ENVIRONMENT, cwd.buf, dir.buf);
+			if (ceiling && *ceiling) {
+				strbuf_addch(&message, '\n');
+				/*
+				 * TRANSLATORS: The first %s is the name of
+				 * the environment variable, the second %s is
+				 * its value.
+				 */
+				strbuf_addf(&message, _("$%s is set to '%s'"),
+					    CEILING_DIRECTORIES_ENVIRONMENT, ceiling);
+			}
+			die("%s", message.buf);
+		}
 		*nongit_ok = 1;
 		break;
 	case GIT_DIR_HIT_MOUNT_POINT:

@@ -101,7 +101,9 @@ test_expect_success 'setup: discovery fails when a valid git directory not found
 		cd parent/no-valid-git-directory-within-ceiling/ceil/sub &&
 		test_must_fail env GIT_CEILING_DIRECTORIES="$(pwd)/../../" \
 			git rev-parse --is-bare-repository 2>stderr &&
-		test_grep "not a git repository (or any of the parent directories)" stderr
+		test_grep "not a git repository (or any of the parent directories)" stderr &&
+		test_grep "searched from .*ceil/sub.*up to.*ceil." stderr &&
+		test_grep "GIT_CEILING_DIRECTORIES is set to" stderr
 	)
 '
 
