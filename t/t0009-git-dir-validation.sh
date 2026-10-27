@@ -107,7 +107,7 @@ test_expect_success 'setup: discovery fails when a valid git directory not found
 	)
 '
 
-test_expect_success 'setup: discovery fails with unusable $GIT_OBJECT_DIRECTORY and explicit gitdir' '
+test_expect_success 'setup: unusable $GIT_OBJECT_DIRECTORY is reported with explicit gitdir' '
 	test_when_finished "rm -rf parent/invalid-git-object-directory-config" &&
 	mkdir -p parent/invalid-git-object-directory-config &&
 	(
@@ -115,8 +115,40 @@ test_expect_success 'setup: discovery fails with unusable $GIT_OBJECT_DIRECTORY 
 		git init --bare real-repo &&
 		test_must_fail env GIT_OBJECT_DIRECTORY="/path/to/does-not-exist" \
 			git --git-dir real-repo rev-parse --is-bare-repository 2>stderr &&
-		test_grep "not a git repository" stderr
+		test_grep "not a git repository" stderr &&
+		test_grep "cannot access object directory .*does-not-exist" stderr &&
+		test_grep "GIT_OBJECT_DIRECTORY" stderr
 	)
+'
+
+test_expect_success 'setup: unusable $GIT_OBJECT_DIRECTORY is reported during discovery' '
+	test_when_finished "rm -rf objdir-discovery" &&
+	git init objdir-discovery &&
+	(
+		cd objdir-discovery &&
+		test_must_fail env GIT_OBJECT_DIRECTORY="$(pwd)/does-not-exist" \
+			git rev-parse --git-dir 2>stderr &&
+		test_grep "not a git repository" stderr &&
+		test_grep "cannot access object directory .*does-not-exist" stderr &&
+		test_grep "GIT_OBJECT_DIRECTORY" stderr
+	)
+'
+
+test_expect_success 'setup: usable $GIT_OBJECT_DIRECTORY is not reported' '
+	test_when_finished "rm -rf objdir-usable.git objdir-usable-odb" &&
+	git init --bare objdir-usable.git &&
+	mkdir objdir-usable-odb &&
+	GIT_OBJECT_DIRECTORY="$(pwd)/objdir-usable-odb" \
+		git --git-dir objdir-usable.git rev-parse --is-bare-repository >actual 2>stderr &&
+	echo true >expect &&
+	test_cmp expect actual &&
+	test_grep ! "not a git repository" stderr &&
+	test_grep ! "cannot access object directory" stderr &&
+
+	test_must_fail env GIT_OBJECT_DIRECTORY="$(pwd)/objdir-usable-odb" \
+		git --git-dir does-not-exist.git rev-parse --is-bare-repository 2>stderr &&
+	test_grep "not a git repository" stderr &&
+	test_grep ! "cannot access object directory" stderr
 '
 
 test_done

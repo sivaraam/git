@@ -450,6 +450,52 @@ done:
 	return ret;
 }
 
+/*
+ * If $GIT_OBJECT_DIRECTORY names a directory we cannot use, describe why in
+ * `out` and return 1, otherwise return 0.
+ *
+ * Note that the check is not specific to any one candidate directory: when the
+ * variable is set but unusable, is_git_directory() rejects every directory it
+ * is given, so repository discovery cannot succeed anywhere.
+ */
+static int describe_unusable_object_dir(struct strbuf *out)
+{
+	const char *objdir = getenv(DB_ENVIRONMENT);
+	int saved_errno;
+
+	if (!objdir || !access(objdir, X_OK))
+		return 0;
+	saved_errno = errno;
+
+	/*
+	 * TRANSLATORS: The first %s is a path, the second %s is the
+	 * name of the environment variable that set it, and the third
+	 * %s is the system error message.
+	 */
+	strbuf_addf(out, _("cannot access object directory '%s' set via $%s: %s"),
+		    objdir, DB_ENVIRONMENT, strerror(saved_errno));
+	return 1;
+}
+
+/*
+ * Die with `message`, which reports that no repository could be used. When an
+ * unusable $GIT_OBJECT_DIRECTORY is what stood in the way, say so as well: on
+ * its own the message blames the repository we were pointed at, which may be
+ * perfectly fine.
+ *
+ * `message` is not released, as we are about to exit anyway.
+ */
+static void NORETURN die_no_repository(struct strbuf *message)
+{
+	struct strbuf objdir = STRBUF_INIT;
+
+	if (describe_unusable_object_dir(&objdir))
+		strbuf_addf(message, "\n%s", objdir.buf);
+	strbuf_release(&objdir);
+
+	die("%s", message->buf);
+}
+
 int is_nonbare_repository_dir(struct strbuf *path)
 {
 	int ret = 0;
@@ -1148,17 +1194,22 @@ static void repo_discover_explicit_gitdir(struct repo_discovery *discovery,
 	}
 
 	if (!is_git_directory(gitdirenv)) {
+		struct strbuf message = STRBUF_INIT;
+
 		if (nongit_ok) {
 			*nongit_ok = 1;
 			goto out;
 		}
-		/*
-		 * TRANSLATORS: The first %s is a path, the second %s is the
-		 * name of the environment variable it was taken from.
-		 */
-		die(_("not a git repository: '%s'\n"
-		      "this path was taken from $%s (which can also be set with --git-dir or --bare)"),
-		    gitdirenv, GIT_DIR_ENVIRONMENT);
+		strbuf_addf(&message,
+			    /*
+			     * TRANSLATORS: The first %s is a path, the second
+			     * %s is the name of the environment variable it
+			     * was taken from.
+			     */
+			    _("not a git repository: '%s'\n"
+			      "this path was taken from $%s (which can also be set with --git-dir or --bare)"),
+			    gitdirenv, GIT_DIR_ENVIRONMENT);
+		die_no_repository(&message);
 	}
 
 	if (read_and_verify_repository_format(&discovery->format, gitdirenv, nongit_ok))
@@ -2021,15 +2072,20 @@ static void repo_discover(struct repo_discovery *discovery, int *nongit_ok)
 				strbuf_addf(&message, _("$%s is set to '%s'"),
 					    CEILING_DIRECTORIES_ENVIRONMENT, ceiling);
 			}
-			die("%s", message.buf);
+			die_no_repository(&message);
 		}
 		*nongit_ok = 1;
 		break;
 	case GIT_DIR_HIT_MOUNT_POINT:
-		if (!nongit_ok)
-			die(_("not a git repository (or any parent up to mount point %s)\n"
-			      "Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set)."),
-			    dir.buf);
+		if (!nongit_ok) {
+			struct strbuf message = STRBUF_INIT;
+
+			strbuf_addf(&message,
+				    _("not a git repository (or any parent up to mount point %s)\n"
+				      "Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set)."),
+				    dir.buf);
+			die_no_repository(&message);
+		}
 		*nongit_ok = 1;
 		break;
 	case GIT_DIR_INVALID_OWNERSHIP:
